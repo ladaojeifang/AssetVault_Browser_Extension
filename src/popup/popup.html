@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AssetVault Pro</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>AssetVault Pro</h1>
+      <p id="status" class="status">检测中…</p>
+    </header>
+
+    <section class="actions">
+      <button id="batchCollect" type="button" class="primary">批量收藏</button>
+      <p class="hint" style="margin:0 0 8px">
+        在当前页面打开收藏面板，预览、筛选、保存所有图片。
+      </p>
+      <button id="batchVideoSave" type="button">视频/GIF 深度采集</button>
+      <button id="startShot" type="button">截图</button>
+    </section>
+
+    <section class="shot" style="margin-top:12px">
+      <label>
+        截图模式
+        <select id="shotMode">
+          <option value="region">区域</option>
+          <option value="element">元件</option>
+          <option value="fullpage">整页</option>
+        </select>
+      </label>
+    </section>
+
+    <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb" />
+
+    <section>
+      <label>
+        API 地址
+        <input id="apiBaseUrl" type="url" spellcheck="false" />
+      </label>
+      <label>
+        Token
+        <input id="token" type="password" autocomplete="off" />
+      </label>
+      <label>
+        默认文件夹
+        <select id="defaultFolderId">
+          <option value="">（不指定）</option>
+        </select>
+      </label>
+      <label>
+        重复策略
+        <select id="duplicatePolicy">
+          <option value="use_existing">跳过已存在</option>
+          <option value="import_copy">强制再导入</option>
+        </select>
+      </label>
+      <label class="checkbox-label">
+        <input id="enableDragSaver" type="checkbox" checked />
+        启用拖拽保存
+      </label>
+      <button id="savePrefs" type="button">保存设置</button>
+    </section>
+
+    <p class="hint">
+      请保持 AssetVault Pro 已启动，并在设置中启用 Web API。
+    </p>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
