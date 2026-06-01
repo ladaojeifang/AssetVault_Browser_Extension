@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>批量采集 · AssetVault Pro</title>
+    <link rel="stylesheet" href="batch.css" />
+  </head>
+  <body>
+    <header>
+      <h1>批量采集</h1>
+      <p id="pageInfo" class="page-info"></p>
+      <div class="toolbar">
+        <button id="rescan" type="button" title="从来源页重新扫描图片（适用于 SPA 懒加载）">重新扫描</button>
+        <button id="selectAll" type="button">全选</button>
+        <button id="selectNone" type="button">全不选</button>
+        <button id="importSelected" type="button" class="primary">导入选中</button>
+      </div>
+      <!-- Filter Bar: 由 batch.ts 动态创建并插入到此处 (toolbar 之后, importStatus 之前) -->
+      <!-- <div id="filterBar" class="bs-filter-bar"></div> -->
+      <p id="importStatus" class="import-status"></p>
+      <ul id="importDetails" class="import-details" hidden></ul>
+    </header>
+    <main id="grid" class="grid"></main>
+    <script type="module" src="batch.js"></script>
+  </body>
+</html>
