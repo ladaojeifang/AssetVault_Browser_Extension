@@ -1,0 +1,49 @@
+.assetvault-drop-zone {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483646;
+  width: 200px;
+  height: 72px;
+  border: 2px dashed #64748b;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #e2e8f0;
+  font: 12px/1.4 system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.assetvault-drop-zone.active {
+  opacity: 1;
+  pointer-events: auto;
+  border-color: #3b82f6;
+}
+
+.assetvault-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 2147483647;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #f8fafc;
+  font: 13px system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.assetvault-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
