@@ -1,0 +1,8 @@
+Chrome / Edge 请加载本仓库下的 dist 文件夹，不要加载仓库根目录。
+
+示例路径（按你的实际克隆位置修改）：
+  G:\work\soft_script\AssetVault_Browser_Extension\dist
+
+若 dist 里没有 manifest.json，请先在本仓库根目录执行：
+  pnpm install
+  pnpm run build
