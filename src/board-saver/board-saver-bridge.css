@@ -1,0 +1,339 @@
+/* ── Board Saver Bridge — overlay + right panel ─────────────────────── */
+
+/* Full-screen overlay */
+#assetvault-board-saver-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+}
+
+/* Semi-transparent backdrop */
+#assetvault-board-saver-overlay .bs-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.25);
+  z-index: 1;
+}
+
+/* Right-side panel */
+#assetvault-board-saver-overlay .bs-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 55vw;
+  min-width: 520px;
+  max-width: 900px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: -4px 0 40px rgba(0, 0, 0, 0.18);
+  font: 13px/1.45 system-ui, -apple-system, sans-serif;
+  color: #1f2937;
+}
+
+/* ── Scoped variables inside panel ──────────────────────────────────── */
+
+.bs-panel {
+  --bs-bg: #ffffff;
+  --bs-surface: #f5f6f8;
+  --bs-border: #e5e7eb;
+  --bs-text: #1f2937;
+  --bs-text-dim: #9ca3af;
+  --bs-accent: #3b82f6;
+  --bs-accent-light: #eff6ff;
+  --bs-radius: 8px;
+  box-sizing: border-box;
+}
+.bs-panel *, .bs-panel *::before, .bs-panel *::after { box-sizing: border-box; }
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+
+.bs-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f5f6f8;
+  flex-shrink: 0;
+}
+
+.bs-header-title { font-size: 14px; font-weight: 700; }
+
+.bs-search {
+  width: 160px;
+  padding: 5px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  background: #fff;
+}
+.bs-search:focus { border-color: #3b82f6; }
+
+.bs-tool-btn {
+  padding: 4px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bs-tool-btn:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+.bs-tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.bs-count {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.bs-close-btn {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  padding: 2px 8px;
+  margin-left: 4px;
+}
+.bs-close-btn:hover { background: rgba(0,0,0,0.06); }
+
+/* ── Body ────────────────────────────────────────────────────────────── */
+
+.bs-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.bs-grid-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px;
+}
+
+.bs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────── */
+
+.bs-card {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #f5f6f8;
+  border: 2px solid transparent;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.12s;
+}
+
+.bs-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+}
+
+.bs-card.selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.bs-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.bs-card:hover .bs-check,
+.bs-card.selected .bs-check { opacity: 1; }
+
+.bs-check svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
+  color: #3b82f6;
+}
+
+.bs-thumb-wrap {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #f0f0f0;
+}
+
+.bs-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bs-info {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+}
+
+.bs-filename {
+  font-size: 11px;
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.bs-meta-line {
+  font-size: 10px;
+  color: #9ca3af;
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Empty ───────────────────────────────────────────────────────────── */
+
+.bs-empty-hint {
+  grid-column: 1 / -1;
+  margin: 48px auto;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+/* ── Filter sidebar ──────────────────────────────────────────────────── */
+
+.bs-filter-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  border-left: 1px solid #e5e7eb;
+  overflow-y: auto;
+  background: #f5f6f8;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bs-filter-section h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.bs-filter-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s;
+}
+
+.bs-filter-item:hover { background: rgba(0,0,0,0.03); }
+
+.bs-filter-item.active {
+  background: #eff6ff;
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.bs-filter-item .bs-filter-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: #9ca3af;
+  background: rgba(0,0,0,0.05);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.bs-filter-item.active .bs-filter-count {
+  background: #3b82f6;
+  color: #fff;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+
+.bs-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-top: 1px solid #e5e7eb;
+  background: #f5f6f8;
+  flex-shrink: 0;
+}
+
+.bs-footer-status {
+  flex: 1;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.bs-save-btn {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bs-save-btn:hover { background: #2563eb; }
+.bs-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+
+.bs-toast {
+  position: absolute;
+  bottom: 56px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  padding: 7px 16px;
+  border-radius: 6px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s ease;
+  z-index: 9999;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.bs-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
