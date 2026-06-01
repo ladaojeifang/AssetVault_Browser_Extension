@@ -45,7 +45,7 @@ function fromProjectImages(pageUrl: string, pageTitle: string): MediaCandidate[]
     '.content-area img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.original || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -78,7 +78,7 @@ function fromBackgroundImages(pageUrl: string, pageTitle: string): MediaCandidat
     '[class*="cover-image"]'
   ]
   for (const sel of bgSelectors) {
-    for (const el of Array.from(document.querySelectorAll(sel))) {
+    for (const el of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const bgStyle = el.style.backgroundImage || getComputedStyle(el).backgroundImage || ''
       const match = bgStyle.match(/url\(['"]?(.*?)['"]?\)/)
       if (!match || !match[1]) continue
@@ -100,7 +100,7 @@ function fromBackgroundImages(pageUrl: string, pageTitle: string): MediaCandidat
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!OS_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo')) continue

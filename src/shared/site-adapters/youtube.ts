@@ -50,7 +50,7 @@ export function resolveYoutubeCandidates(pageUrl: string, pageTitle: string): Me
     if (cand) out.push(cand)
   }
 
-  for (const video of Array.from(document.querySelectorAll('video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     const abs = toAbsoluteUrl(video.currentSrc || video.src || '', pageUrl)
     if (!abs) continue
     const cand = makeMediaCandidate({

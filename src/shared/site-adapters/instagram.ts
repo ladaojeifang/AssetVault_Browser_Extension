@@ -50,7 +50,7 @@ function fromMetaTags(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromLdJson(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const s of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script[type="application/ld+json"]'))) {
     const txt = s.textContent || ''
     let items: unknown
     try {
@@ -110,7 +110,7 @@ function fromLdJson(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromArticleMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Images in article (post detail / carousel)
-  for (const img of Array.from(document.querySelectorAll('article img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('article img'))) {
     const src = img.getAttribute('src') || img.currentSrc || ''
     if (!src || src.startsWith('data:') || !src.includes('cdninstagram.com')) continue
     const abs = toAbsoluteUrl(src, pageUrl)
@@ -127,7 +127,7 @@ function fromArticleMedia(pageUrl: string, pageTitle: string): MediaCandidate[] 
   }
 
   // Video elements (Reels, Stories)
-  for (const video of Array.from(document.querySelectorAll('article video, video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('article video, video'))) {
     for (const src of [video.currentSrc, video.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
       if (!abs) continue
@@ -165,7 +165,7 @@ function fromScriptEmbedded(pageUrl: string, pageTitle: string): MediaCandidate[
   const out: MediaCandidate[] = []
   // Instagram CDN patterns in embedded scripts
   const cdnRe = /https?:\/\/(?:[^/]*\.)?(?:cdninstagram\.com|fbcdn\.net)[^\s"'\\]+?\.(?:mp4|jpg|jpeg|png|gif)(\?[^\s"'\\]*)?/gi
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt) continue
     const hits = txt.match(cdnRe) || []

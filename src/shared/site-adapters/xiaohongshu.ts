@@ -176,7 +176,7 @@ function fromDomMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const xhsCdnRe = /xhscdn\.com|ci\.xiaohongshu\.com/i
 
   // 扫描 CDN 图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!xhsCdnRe.test(src)) continue
     const abs = toAbsoluteUrl(src, pageUrl)
@@ -193,7 +193,7 @@ function fromDomMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
   }
 
   // 扫描视频元素
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const src of [v.currentSrc, v.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
       if (!abs) continue
@@ -218,7 +218,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
   const out: MediaCandidate[] = []
   const cdnRe = /(https?:\/\/[^"'\\s]*(?:xhscdn\.com|ci\.xiaohongshu\.com)[^"'\\s]*)/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('__INITIAL_STATE__')) continue
     const hits = txt.match(cdnRe) || []

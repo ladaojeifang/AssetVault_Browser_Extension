@@ -68,7 +68,7 @@ function fromArticleBodyImages(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of articleSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -104,7 +104,7 @@ function fromArticleBodyImages(pageUrl: string, pageTitle: string): MediaCandida
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面所有 Medium CDN 图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!MEDIUM_CDN_RE.test(src)) continue
 

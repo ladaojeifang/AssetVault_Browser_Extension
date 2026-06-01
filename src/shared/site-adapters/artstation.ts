@@ -51,7 +51,7 @@ function fromOgImage(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromJsonLd(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const el of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('script[type="application/ld+json"]'))) {
     let data: unknown
     try {
       data = JSON.parse(el.textContent || '')
@@ -112,7 +112,7 @@ function fromAssetMetaImages(pageUrl: string, pageTitle: string): MediaCandidate
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.dataset.src || ''
       if (!src) continue
       // Skip avatars and UI icons
@@ -142,7 +142,7 @@ function fromAssetMetaImages(pageUrl: string, pageTitle: string): MediaCandidate
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Catch all ArtStation CDN images on the page
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!ARTSTATION_CDN_RE.test(src)) continue
     // Skip small UI elements
@@ -169,7 +169,7 @@ function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromEmbeddedAssets(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // ArtStation may embed asset list in __INITIAL_STATE__ or similar
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('assets') && !txt.includes('artstation.com/assets')) continue
 

@@ -48,7 +48,7 @@ export function resolveBilibiliCandidates(pageUrl: string, pageTitle: string): M
     })
     if (cand) out.push(cand)
   }
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     const abs = toAbsoluteUrl(v.currentSrc || v.src || '', pageUrl)
     if (!abs) continue
     const cand = makeMediaCandidate({

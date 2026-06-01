@@ -34,7 +34,7 @@ function fromOgImage(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromInitialData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const s of Array.from(document.querySelectorAll('script[type="application/json"]'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script[type="application/json"]'))) {
     const txt = s.textContent || ''
     let data: unknown
     try {
@@ -99,7 +99,7 @@ function fromInitialData(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromDomImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img[src*="i.pinimg.com"]'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="i.pinimg.com"]'))) {
     const src = img.getAttribute('src') || ''
     if (!src) continue
     const abs = toAbsoluteUrl(src, pageUrl)
@@ -120,7 +120,7 @@ function fromDomImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const video of Array.from(document.querySelectorAll('video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const src of [video.currentSrc, video.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
       if (!abs) continue

@@ -331,7 +331,7 @@ function fromPinterestVideoPin(pageUrl: string, pageTitle: string): MediaCandida
 //   import { bypassFetch } from './bypass-fetch'
 //   import { ConcurrencyQueue } from './concurrency'
 //
-//   const queue = new ConcurrencyQueue({ concurrency: 4 })
+//   const queue = new ConcurrencyQueue(4)
 //   for (const candidate of candidates) {
 //     await queue.add(async () => {
 //       const blob = await bypassFetch(candidate.url, { referer: candidate.referer })

@@ -20,6 +20,11 @@ import {
 } from '../shared/tab-messaging'
 import type { BgMessage, BgResponse } from '../shared/messages'
 import { ConcurrencyQueue } from '../shared/concurrency'
+import {
+  FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
+  FULLPAGE_MAX_SCROLL_SEGMENTS,
+  planFullpageCapturePositions,
+} from '../shared/fullpage-capture'
 
 /** Default concurrency for batch download operations. */
 const BATCH_DOWNLOAD_CONCURRENCY = 2
@@ -102,11 +107,10 @@ let lastCaptureVisibleTabAt = 0
 
 // 整页截图思路：滚动分段 + 重叠，隐藏 fixed/sticky，暂停视频，避免拼接缝和重复内容。
 const FULLPAGE_AFTER_SCROLL_MS = 520
-const FULLPAGE_MAX_SCROLL_SEGMENTS = 25
-const FULLPAGE_OVERLAP_CSS_MAX = 200
 // 保守的 Canvas 限制：避免 OffscreenCanvas / GPU 纹理上限导致转 blob 失败。
 const FULLPAGE_CANVAS_MAX_SIDE = 16384
 const FULLPAGE_CANVAS_MAX_PIXELS = 80_000_000
+const FULLPAGE_IMPORT_API_TIMEOUT_MS = 120_000
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
@@ -396,23 +400,40 @@ function removeDownloadArtifacts(downloadId: number): Promise<void> {
   })
 }
 
+function estimateDataUrlBytes(dataUrl: string): number {
+  const comma = dataUrl.indexOf(',')
+  if (comma < 0) return dataUrl.length
+  const b64 = dataUrl.slice(comma + 1)
+  return Math.floor((b64.length * 3) / 4)
+}
+
 async function importDataUrlViaDownload(args: {
   dataUrl: string
   filename: string
   targetFolderId?: string
   duplicatePolicy?: string
+  /** Use longer API timeout for large full-page strips. */
+  apiTimeoutMs?: number
+  /** Skip API when payload is too large (go straight to download+import). */
+  maxDirectImportBytes?: number
 }): Promise<{ assetId?: string; skipped?: boolean }> {
-  // Prefer direct dataUrl API for screenshot flow so duplicatePolicy is applied on logical content import.
-  // Keep downloads fallback for oversized payloads or transient API errors.
-  try {
-    return await importFromDataUrl({
-      dataUrl: args.dataUrl,
-      filename: args.filename,
-      targetFolderId: args.targetFolderId,
-      duplicatePolicy: args.duplicatePolicy
-    })
-  } catch {
-    // fallback to download+filePath path below
+  const maxDirect = args.maxDirectImportBytes ?? FULLPAGE_MAX_DIRECT_IMPORT_BYTES
+  const useDirectApi = estimateDataUrlBytes(args.dataUrl) <= maxDirect
+
+  if (useDirectApi) {
+    try {
+      return await importFromDataUrl(
+        {
+          dataUrl: args.dataUrl,
+          filename: args.filename,
+          targetFolderId: args.targetFolderId,
+          duplicatePolicy: args.duplicatePolicy,
+        },
+        { timeoutMs: args.apiTimeoutMs ?? 10_000 },
+      )
+    } catch {
+      // fallback to download+filePath path below
+    }
   }
 
   return new Promise((resolve, reject) => {
@@ -507,6 +528,46 @@ async function dataUrlToImageBitmap(dataUrl: string): Promise<ImageBitmap> {
   const res = await fetch(dataUrl)
   const blob = await res.blob()
   return await createImageBitmap(blob)
+}
+
+/** Export canvas to blob, lowering JPEG quality / scale until under size budget. */
+async function canvasToImportBlob(
+  canvas: OffscreenCanvas,
+  format: 'jpeg' | 'png',
+  maxBytes: number,
+): Promise<Blob> {
+  let current: OffscreenCanvas = canvas
+
+  const tryExport = async (): Promise<Blob | null> => {
+    if (format === 'png') {
+      const blob = await current.convertToBlob({ type: 'image/png' })
+      return blob.size <= maxBytes ? blob : null
+    }
+    for (const quality of [0.88, 0.75, 0.62, 0.5, 0.38]) {
+      const blob = await current.convertToBlob({ type: 'image/jpeg', quality })
+      if (blob.size <= maxBytes) return blob
+    }
+    return null
+  }
+
+  for (let pass = 0; pass < 4; pass++) {
+    const blob = await tryExport()
+    if (blob) return blob
+    const w = Math.max(1, Math.floor(current.width * 0.75))
+    const h = Math.max(1, Math.floor(current.height * 0.75))
+    if (w === current.width && h === current.height) break
+    const scaled = new OffscreenCanvas(w, h)
+    const ctx = scaled.getContext('2d')
+    if (!ctx) break
+    ctx.drawImage(current, 0, 0, w, h)
+    current = scaled
+  }
+
+  throw new Error(
+    format === 'png'
+      ? '整页截图分片过大（PNG），请改用 JPEG 或缩短页面'
+      : '整页截图分片过大，无法导入（请尝试较短页面）',
+  )
 }
 
 async function cropAndImportRect(args: {
@@ -700,31 +761,21 @@ async function stitchAndImportFullPage(args: {
       ? ({ format: 'png' } as chrome.tabs.CaptureVisibleTabOptions)
       : ({ format: 'jpeg', quality: 90 } as chrome.tabs.CaptureVisibleTabOptions)
 
-  // 生成滚动采集位置：带固定重叠（用于避免拼接缝），并限制最大段数避免 quota。
-  const maxSegments = Math.max(2, FULLPAGE_MAX_SCROLL_SEGMENTS)
-  const overlapTargetCss = Math.min(FULLPAGE_OVERLAP_CSS_MAX, viewportCss)
-  const baseStepCss = Math.max(1, viewportCss - overlapTargetCss)
-  const minStepForQuotaCss =
-    scrollHeightCss <= viewportCss ? viewportCss : Math.ceil((scrollHeightCss - viewportCss) / Math.max(1, maxSegments - 1))
-  const stepCss = Math.max(baseStepCss, minStepForQuotaCss)
-  const overlapCss = Math.max(0, viewportCss - stepCss)
+  const scrollPlan = planFullpageCapturePositions({
+    scrollHeightCss,
+    viewportCss,
+    maxSegments: FULLPAGE_MAX_SCROLL_SEGMENTS,
+  })
+  const capturePositions = scrollPlan.positions
+  const overlapCss = scrollPlan.overlapCss
+  const effectiveScrollHeightCss = scrollPlan.effectiveScrollHeightCss
 
-  const capturePositions: number[] = []
-  if (scrollHeightCss <= viewportCss + 1) {
-    capturePositions.push(0)
-  } else {
-    for (let y = 0; y + viewportCss < scrollHeightCss - 1; y += stepCss) {
-      capturePositions.push(Math.max(0, Math.round(y)))
-    }
-    const lastY = Math.max(0, Math.round(scrollHeightCss - viewportCss))
-    if (capturePositions.length === 0 || capturePositions[capturePositions.length - 1] !== lastY) {
-      capturePositions.push(lastY)
-    }
-  }
-
-  if (capturePositions.length > maxSegments + 3) {
-    // 兜底：如果某些奇怪页面使计算膨胀，直接拒绝以免进一步触发 quota。
-    throw new Error('整页截图段数过多，已拒绝生成（避免触发浏览器截图限额）')
+  if (scrollPlan.truncated) {
+    await notify(
+      tabId,
+      `页面过长，整页截图仅覆盖前 ${Math.round(effectiveScrollHeightCss / viewportCss)} 屏高度`,
+    )
+    await sleep(1200)
   }
 
   await notify(tabId, `整页截图中 0/${capturePositions.length}…`)
@@ -764,7 +815,7 @@ async function stitchAndImportFullPage(args: {
     if (widthPx) return
     widthPx = firstBitmap.width
     captureScale = widthPx / innerWidthCss
-    totalHeightPx = Math.max(1, Math.round(scrollHeightCss * captureScale))
+    totalHeightPx = Math.max(1, Math.round(effectiveScrollHeightCss * captureScale))
     overlapPx = overlapPxFromScale(captureScale)
 
     if (widthPx > FULLPAGE_CANVAS_MAX_SIDE) {
@@ -899,16 +950,20 @@ async function stitchAndImportFullPage(args: {
       const viewportDataUrl = await captureVisibleTabThrottled(args.tab.windowId, captureOptions)
       const bitmap = await dataUrlToImageBitmap(viewportDataUrl)
 
-      ensureOutputs(bitmap)
+      try {
+        ensureOutputs(bitmap)
 
-      const isFirst = i === 0
-      const srcCropTopPx = isFirst ? 0 : overlapPx
-      const drawableHeightPx = Math.max(0, bitmap.height - srcCropTopPx)
-      const destStartPx = Math.max(0, Math.round((yCss + (isFirst ? 0 : overlapCss)) * captureScale))
-      const drawHeightPx = Math.max(0, Math.min(drawableHeightPx, totalHeightPx - destStartPx))
+        const isFirst = i === 0
+        const srcCropTopPx = isFirst ? 0 : overlapPx
+        const drawableHeightPx = Math.max(0, bitmap.height - srcCropTopPx)
+        const destStartPx = Math.max(0, Math.round((yCss + (isFirst ? 0 : overlapCss)) * captureScale))
+        const drawHeightPx = Math.max(0, Math.min(drawableHeightPx, totalHeightPx - destStartPx))
 
-      if (drawHeightPx > 0) {
-        drawToOutputs(bitmap, srcCropTopPx, destStartPx, drawHeightPx)
+        if (drawHeightPx > 0) {
+          drawToOutputs(bitmap, srcCropTopPx, destStartPx, drawHeightPx)
+        }
+      } finally {
+        bitmap.close()
       }
 
       if (i % 2 === 0 || i === capturePositions.length - 1) {
@@ -926,6 +981,7 @@ async function stitchAndImportFullPage(args: {
     }
 
     const ext = args.format === 'png' ? '.png' : '.jpg'
+    const exportFormat = args.format === 'png' ? 'png' : 'jpeg'
     const imported: Array<string | undefined> = []
     for (let k = 0; k < outputCount; k++) {
       if (isAborted()) {
@@ -935,17 +991,20 @@ async function stitchAndImportFullPage(args: {
       }
 
       const c = outputCanvases[k]
-      const outBlob = await c.convertToBlob({
-        type: args.format === 'png' ? 'image/png' : 'image/jpeg',
-        quality: args.format === 'png' ? undefined : 0.9
-      } as any)
+      const outBlob = await canvasToImportBlob(
+        c,
+        exportFormat,
+        FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
+      )
       const dataUrl = await blobToDataUrl(outBlob)
 
       const importResult = await importDataUrlViaDownload({
         dataUrl,
         filename: `screenshot-fullpage-${Date.now()}-${k + 1}-of-${outputCount}${ext}`,
         targetFolderId: args.prefs.defaultFolderId || undefined,
-        duplicatePolicy: 'import_copy'
+        duplicatePolicy: 'import_copy',
+        apiTimeoutMs: FULLPAGE_IMPORT_API_TIMEOUT_MS,
+        maxDirectImportBytes: FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
       })
 
       imported.push(importResult.assetId)

@@ -28,7 +28,7 @@ function fromOgImage(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromJsonLd(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const el of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('script[type="application/ld+json"]'))) {
     let data: unknown
     try {
       data = JSON.parse(el.textContent || '')
@@ -104,7 +104,7 @@ function fromProjectModules(pageUrl: string, pageTitle: string): MediaCandidate[
     '[data-behance-project-module] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.dataset.src || ''
       if (!src) continue
       // Skip tiny thumbnails and decorative images
@@ -128,7 +128,7 @@ function fromProjectModules(pageUrl: string, pageTitle: string): MediaCandidate[
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Catch any CDN-hosted Behance images that weren't caught by selectors above
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!BEHANCE_CDN_RE.test(src)) continue
     if (src.includes('1x1.') || src.includes('spacer') || src.includes('avatar')) continue
@@ -150,7 +150,7 @@ function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Check for embedded JSON data in script tags
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     // Look for project image data in various formats Behance uses
     if (txt.includes('cdn-assets-all.ftcdn.net') || txt.includes('mir-s3-www-cdn-ftresources')) {

@@ -103,7 +103,7 @@ function fromDomImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
 
   // Main artwork images in figure elements
-  for (const fig of Array.from(document.querySelectorAll('figure img, [role="presentation"] img, .artwork img'))) {
+  for (const fig of Array.from(document.querySelectorAll<HTMLImageElement>('figure img, [role="presentation"] img, .artwork img'))) {
     const src = fig.getAttribute('src') || fig.dataset.src || ''
     if (!src || !PIXIV_CDN_RE.test(src)) continue
     if (src.includes('/profile/') || src.includes('/common/') || src.includes('/icon/')) continue
@@ -125,7 +125,7 @@ function fromDomImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
   // Any other pximg.net images not already captured
   const seenInFigure = new Set(out.map(c => c.url.split('?')[0]))
-  for (const img of Array.from(document.querySelectorAll('img[src*="pximg.net"]'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img[src*="pximg.net"]'))) {
     const src = img.getAttribute('src') || ''
     if (!src) continue
     if (src.includes('/profile/') || src.includes('/common/') || src.includes('/icon/')) continue

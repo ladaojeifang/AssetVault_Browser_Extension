@@ -44,7 +44,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of contentSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -83,7 +83,7 @@ function fromNestedQuoteImages(pageUrl: string, pageTitle: string): MediaCandida
     '.quote_content img',
   ]
   for (const sel of nestedSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.getAttribute('data-src') || ''
       if (!src) continue
       if (!isContentImage(img, src)) continue
@@ -108,7 +108,7 @@ function fromNestedQuoteImages(pageUrl: string, pageTitle: string): MediaCandida
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面中所有贴吧内容CDN图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!TIEBA_CONTENT_IMG_RE.test(src)) continue
     if (!isContentImage(img, src)) continue

@@ -37,7 +37,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '[class*="post-content"] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -70,7 +70,7 @@ function fromSlideshow(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '.photo-gallery img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.lazySrc || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)

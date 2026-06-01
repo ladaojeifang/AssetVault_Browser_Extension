@@ -21,7 +21,7 @@ type VimeoConfig = {
 }
 
 function parseVimeoConfig(): VimeoConfig | null {
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('config') || !txt.includes('progressive')) continue
     try {
@@ -169,7 +169,7 @@ function fromScriptConfig(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const src of [v.currentSrc, v.src]) {
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -187,7 +187,7 @@ function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[]
     }
   }
   // iframe embed 中的视频源
-  for (const iframe of Array.from(document.querySelectorAll('iframe[src*="vimeo.com"]'))) {
+  for (const iframe of Array.from(document.querySelectorAll<HTMLImageElement>('iframe[src*="vimeo.com"]'))) {
     const src = iframe.getAttribute('src')
     if (src) {
       const abs = toAbsoluteUrl(src, pageUrl)

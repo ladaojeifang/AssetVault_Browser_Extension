@@ -67,7 +67,7 @@ function fromWorkDetailImage(pageUrl: string, pageTitle: string): MediaCandidate
   ]
 
   for (const sel of mainImgSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -96,7 +96,7 @@ function fromWorkDetailImage(pageUrl: string, pageTitle: string): MediaCandidate
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面中所有POCO CDN图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!POCO_CDN_RE.test(src)) continue
     // 跳过头像、logo、UI装饰
@@ -131,7 +131,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
   // 从 script 中提取 POCO CDN 图片
   const pocoImgRe = /https?:\/\/[^\s"'\\<>]*(?:pocophoto\.cn|poco\.cn)[^\s"'\\<>]*\.(?:jpg|jpeg|png|gif|webp)(\?[^\s"'\\<>]*)?/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('pocophoto') && !txt.includes('poco.cn')) continue
     const hits = txt.match(pocoImgRe) || []

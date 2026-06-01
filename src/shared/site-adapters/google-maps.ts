@@ -48,7 +48,7 @@ function fromPoiImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       if (!(img instanceof HTMLImageElement)) continue
       const src = img.currentSrc || img.src || ''
       if (!src || !isGoogleImageHost(src)) continue
@@ -73,7 +73,7 @@ function fromPoiImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromBackgroundImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
 
-  for (const el of Array.from(document.querySelectorAll('*'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('*'))) {
     if (!(el instanceof HTMLElement)) continue
     let bg = ''
     try {
@@ -110,7 +110,7 @@ function fromBackgroundImages(pageUrl: string, pageTitle: string): MediaCandidat
 function fromCanvasPanorama(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
 
-  for (const c of Array.from(document.querySelectorAll('canvas'))) {
+  for (const c of Array.from(document.querySelectorAll<HTMLImageElement>('canvas'))) {
     if (!(c instanceof HTMLCanvasElement)) continue
     const w = c.width
     const h = c.height

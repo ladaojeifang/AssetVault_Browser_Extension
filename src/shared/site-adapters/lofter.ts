@@ -74,7 +74,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -114,7 +114,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面所有 Lofter CDN 图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!LOFTER_CDN_RE.test(src)) continue
     // 过滤头像和UI
@@ -147,7 +147,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
   // 从 script 中提取 lofter CDN 图片
   const lofterImgRe = /https?:\/\/[^\s"'\\<>]*(?:lf127\.net|lfcdn\.net|loftercdn\.com)[^\s"'\\<>]*/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('lf127.net') && !txt.includes('lfcdn.net') && !txt.includes('loftercdn')) continue
     const hits = txt.match(lofterImgRe) || []

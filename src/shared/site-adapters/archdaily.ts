@@ -45,7 +45,7 @@ function fromGalleryPhotos(pageUrl: string, pageTitle: string): MediaCandidate[]
     '.slideshow img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.original || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -80,7 +80,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '.render-grid img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -102,7 +102,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('.adst.')) continue
     const re = /https?:\/\/(?:adst[^.]*\.com|adimg\.[^"'\s]+)[^"'\s<>]*?\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s"']*)?/gi
@@ -127,7 +127,7 @@ function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!AD_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('avatar')) continue

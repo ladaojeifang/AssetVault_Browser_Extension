@@ -24,7 +24,7 @@ function fromProductMainImage(pageUrl: string, pageTitle: string): MediaCandidat
   const out: MediaCandidate[] = []
   const selectors = ['.spec-items img', '.jqzoom img', '.sku-photo img', '#spec-img img', '#preview img']
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-imgsrc') || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -55,7 +55,7 @@ function fromDetailImages(pageUrl: string, pageTitle: string): MediaCandidate[] 
     '[class*="desc"] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || ''
       if (!src) continue
       // Skip tiny decorative images
@@ -78,7 +78,7 @@ function fromDetailImages(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!JD_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('avatar')) continue

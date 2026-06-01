@@ -9,6 +9,10 @@ import { runMatchingAdapters } from '../shared/site-adapters/index'
 import { filenameFromUrl } from '../shared/collect-meta-core'
 import { enlargeImageUrl } from '../shared/url-enlarger'
 import { type BoardSaverItem, SCAN_INTERVAL_MS, MAX_ITEMS } from './board-saver-types'
+import {
+  type PageType,
+  resolvePostImportAction,
+} from './board-saver-scan-state'
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                            */
@@ -30,7 +34,6 @@ let pageUrl = ''
 let pageTitle = ''
 let overlayEl: HTMLElement | null = null
 
-type PageType = 'unknown' | 'static' | 'lazy' | 'waterfall'
 let pageType: PageType = 'unknown'
 let detectObserver: MutationObserver | null = null
 let domChangeCount = 0
@@ -427,9 +430,31 @@ function updateFilterSidebar(): void {
 /*  Download                                                             */
 /* ------------------------------------------------------------------ */
 
+function resumeScanAfterImport(hadPeriodicTimer: boolean): void {
+  const action = resolvePostImportAction({
+    pageType,
+    scrollComplete,
+    hadPeriodicTimer,
+  })
+  switch (action.type) {
+    case 'resume-periodic':
+      startPeriodic()
+      break
+    case 'resume-lazy-scroll':
+      state = 'scanning'
+      void startScrollScan()
+      break
+    case 'idle':
+      state = 'idle'
+      break
+  }
+}
+
 async function importSelected(): Promise<void> {
   const selected = items.filter(i => i.selected)
   if (!selected.length) { showToast('请至少选择一项'); return }
+  const hadPeriodicTimer = scanTimer !== null
+  stopPeriodic()
   state = 'importing'
   setButtonsDisabled(true)
   setStatus(`正在导入 ${selected.length} 项…`)
@@ -481,7 +506,7 @@ async function importSelected(): Promise<void> {
 
   setStatus(`完成！共 ${selected.length} 项`)
   showToast(`已提交 ${selected.length} 项`)
-  state = scanTimer ? 'scanning' : 'idle'
+  resumeScanAfterImport(hadPeriodicTimer)
   setButtonsDisabled(false)
 }
 

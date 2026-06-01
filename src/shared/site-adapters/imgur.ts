@@ -92,7 +92,7 @@ function fromPostImage(pageUrl: string, pageTitle: string): MediaCandidate[] {
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.currentSrc || ''
       if (!src || src.startsWith('data:')) continue
 
@@ -123,7 +123,7 @@ function fromAlbumImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const selectors = ['.album-images img', '.album-content img', '[class*="album"] img']
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.currentSrc || ''
       if (!src || src.startsWith('data:')) continue
 
@@ -152,7 +152,7 @@ function fromGifPlayerVideos(pageUrl: string, pageTitle: string): MediaCandidate
   const videoSelectors = ['.gif-player video', '.video-wrapper video', '.post-video video']
 
   for (const sel of videoSelectors) {
-    for (const video of Array.from(document.querySelectorAll(sel))) {
+    for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>(sel))) {
       // Check video element's own src
       for (const vSrc of [video.currentSrc, video.src]) {
         if (!vSrc) continue
@@ -194,7 +194,7 @@ function fromGifPlayerVideos(pageUrl: string, pageTitle: string): MediaCandidate
 
 function fromCdnDirectLinks(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!IMGUR_CDN_RE.test(src)) continue
     if (img.width > 1 && img.width < 30) continue

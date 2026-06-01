@@ -9,7 +9,7 @@ import type {
 
 async function request<T>(
   path: string,
-  init?: RequestInit & { query?: Record<string, string> }
+  init?: RequestInit & { query?: Record<string, string>; timeoutMs?: number }
 ): Promise<T> {
   const prefs = await getPreferences()
   let url = apiUrl(prefs, path)
@@ -27,13 +27,15 @@ async function request<T>(
     headers.Authorization = `Bearer ${prefs.token.trim()}`
   }
 
+  const { query: _q, timeoutMs: requestTimeoutMs, ...fetchInit } = init ?? {}
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
+  const timeoutMs = requestTimeoutMs ?? 10_000
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   let res: Response
   try {
     res = await fetch(url, {
-      ...init,
+      ...fetchInit,
       headers,
       signal: controller.signal
     })
@@ -131,15 +133,19 @@ export async function importAsset(body: {
   })
 }
 
-export async function importFromDataUrl(body: {
-  dataUrl: string
-  filename?: string
-  targetFolderId?: string
-  duplicatePolicy?: string
-}): Promise<ImportFromUrlResult> {
+export async function importFromDataUrl(
+  body: {
+    dataUrl: string
+    filename?: string
+    targetFolderId?: string
+    duplicatePolicy?: string
+  },
+  options?: { timeoutMs?: number },
+): Promise<ImportFromUrlResult> {
   return request('/asset/importFromDataUrl', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    timeoutMs: options?.timeoutMs,
   })
 }

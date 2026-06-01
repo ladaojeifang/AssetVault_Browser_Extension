@@ -7,19 +7,24 @@
 
 export type QueueTask<T> = () => Promise<T>
 
-interface QueueEntry<T> {
-  task: QueueTask<T>
-  resolve: (value: T) => void
-  reject: (reason: unknown) => void
+type QueueEntry = {
+  run: () => void
+}
+
+function normalizeConcurrency(concurrency: number): number {
+  if (typeof concurrency !== 'number' || !Number.isFinite(concurrency)) {
+    throw new TypeError(`ConcurrencyQueue: concurrency must be a finite number, got ${String(concurrency)}`)
+  }
+  return Math.max(1, Math.floor(concurrency))
 }
 
 export class ConcurrencyQueue {
   private _activeCount = 0
-  private readonly _queue: Array<QueueEntry<unknown>> = []
+  private readonly _queue: QueueEntry[] = []
   private readonly _maxConcurrency: number
 
   constructor(concurrency: number) {
-    this._maxConcurrency = Math.max(1, concurrency)
+    this._maxConcurrency = normalizeConcurrency(concurrency)
   }
 
   /**
@@ -28,7 +33,17 @@ export class ConcurrencyQueue {
    */
   add<T>(task: QueueTask<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this._queue.push({ task, resolve, reject })
+      this._queue.push({
+        run: () => {
+          void task()
+            .then(resolve)
+            .catch(reject)
+            .finally(() => {
+              this._activeCount--
+              this._tryNext()
+            })
+        },
+      })
       this._tryNext()
     })
   }
@@ -42,7 +57,6 @@ export class ConcurrencyQueue {
         if (this._queue.length === 0 && this._activeCount === 0) {
           resolve()
         } else {
-          // Poll every 10ms instead of chaining promises to avoid stack buildup
           setTimeout(check, 10)
         }
       }
@@ -50,12 +64,10 @@ export class ConcurrencyQueue {
     })
   }
 
-  /** Number of tasks currently waiting in the queue. */
   get pending(): number {
     return this._queue.length
   }
 
-  /** Number of tasks currently executing. */
   get active(): number {
     return this._activeCount
   }
@@ -64,32 +76,18 @@ export class ConcurrencyQueue {
     while (this._activeCount < this._maxConcurrency && this._queue.length > 0) {
       const entry = this._queue.shift()!
       this._activeCount++
-      // Fire-and-forget: single failure does not block other entries
-      entry.task()
-        .then((v) => entry.resolve(v))
-        .catch((err) => entry.reject(err))
-        .finally(() => {
-          this._activeCount--
-          this._tryNext()
-        })
+      entry.run()
     }
   }
 
-  /* ------------------------------------------------------------------ */
-  /*  Preset factories                                                    */
-  /* ------------------------------------------------------------------ */
-
-  /** Queue optimised for batch downloading (6 parallel). */
   static forBatchDownload(): ConcurrencyQueue {
     return new ConcurrencyQueue(6)
   }
 
-  /** Queue optimised for image resolution (4 parallel). */
   static forImageResolve(): ConcurrencyQueue {
     return new ConcurrencyQueue(4)
   }
 
-  /** Queue optimised for site scanning (3 parallel). */
   static forSiteScan(): ConcurrencyQueue {
     return new ConcurrencyQueue(3)
   }

@@ -22,7 +22,7 @@ function fromGifPlayerImages(pageUrl: string, pageTitle: string): MediaCandidate
   ]
 
   for (const sel of gifSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -56,7 +56,7 @@ function fromGifPlayerImages(pageUrl: string, pageTitle: string): MediaCandidate
 function fromVideoSources(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // GIPHY 使用 video 标签来播放 GIF 动画
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     // source 元素
     for (const sourceEl of Array.from(v.querySelectorAll('source'))) {
       const src = sourceEl.getAttribute('src') || ''
@@ -132,7 +132,7 @@ function fromOgMeta(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面所有 GIPHY CDN 图片/媒体
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!GIPHY_CDN_RE.test(src)) continue
 

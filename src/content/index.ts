@@ -238,7 +238,7 @@ const CONTENT_INIT_KEY = '__assetvaultContentInit'
 
 type ContentPageHooks = typeof globalThis & {
   __assetVaultResolveHd?: () => Promise<import('../shared/hd-image-resolver').HdImageResolveResult>
-  __assetVaultScanBatch?: () => PageMediaItem[]
+  __assetVaultScanBatch?: () => Promise<PageMediaItem[]>
 }
 
 function registerContentScript(): void {

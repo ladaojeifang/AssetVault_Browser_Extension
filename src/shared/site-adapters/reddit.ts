@@ -62,7 +62,10 @@ function fromNewRedditMedia(pageUrl: string, pageTitle: string): MediaCandidate[
     for (const el of Array.from(document.querySelectorAll(sel))) {
       let src = ''
       if (el.tagName.toLowerCase() === 'source' || el.tagName.toLowerCase() === 'video') {
-        src = el.getAttribute('src') || (el as HTMLVideoElement).currentSrc || ''
+        src =
+          el.getAttribute('src') ||
+          (el instanceof HTMLVideoElement ? el.currentSrc : '') ||
+          ''
       } else {
         src = el.getAttribute('src') || ''
       }
@@ -101,7 +104,7 @@ function fromOldRedditMedia(pageUrl: string, pageTitle: string): MediaCandidate[
   ]
 
   for (const sel of oldSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -120,7 +123,7 @@ function fromOldRedditMedia(pageUrl: string, pageTitle: string): MediaCandidate[
   }
 
   // Old reddit gallery support
-  for (const galImg of Array.from(document.querySelectorAll('.gallery-img-tile img, .gallery-nav img'))) {
+  for (const galImg of Array.from(document.querySelectorAll<HTMLImageElement>('.gallery-img-tile img, .gallery-nav img'))) {
     const src = galImg.getAttribute('src') || ''
     if (!src) continue
     const abs = toAbsoluteUrl(src, pageUrl)
@@ -144,7 +147,7 @@ function fromRedditCdnImages(pageUrl: string, pageTitle: string): MediaCandidate
   const out: MediaCandidate[] = []
   const seen = new Set<string>()
 
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!REDDIT_IMAGE_CDN_RE.test(src)) continue
 
@@ -184,7 +187,7 @@ function fromRedditVideos(pageUrl: string, pageTitle: string): MediaCandidate[] 
   const out: MediaCandidate[] = []
 
   // Direct video elements and their sources
-  for (const video of Array.from(document.querySelectorAll('video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const sourceEl of Array.from(video.querySelectorAll('source'))) {
       const src = sourceEl.getAttribute('src') || ''
       if (!src) continue
@@ -221,7 +224,7 @@ function fromRedditVideos(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
   // Embedded v.redd.it links from HLS manifests or data attributes
   const videoRe = /https?:\/\/v\.redd\.it\/[^\s"'\\<>]+?\.mp4(\?[^\s"'\\<>]*)?/gi
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     const hits = txt.match(videoRe) || []
     for (const hit of hits) {
@@ -256,7 +259,7 @@ function fromExternalImages(pageUrl: string, pageTitle: string): MediaCandidate[
   ]
 
   for (const sel of contentSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || ''
       if (!src || src.startsWith('data:')) continue
       if (REDDIT_IMAGE_CDN_RE.test(src)) continue // handled by fromRedditCdnImages

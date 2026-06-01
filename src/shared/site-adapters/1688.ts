@@ -29,7 +29,7 @@ function fromProductMainImages(pageUrl: string, pageTitle: string): MediaCandida
     '.subject-wrap img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-ks-lazyload') || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -60,7 +60,7 @@ function fromDetailImages(pageUrl: string, pageTitle: string): MediaCandidate[] 
     '.customized-detail img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 64) continue
@@ -82,7 +82,7 @@ function fromDetailImages(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!ALIBABA_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('search')) continue

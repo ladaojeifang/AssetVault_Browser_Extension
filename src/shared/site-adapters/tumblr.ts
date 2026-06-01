@@ -81,7 +81,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.dataset.src || img.dataset.originalSrc || ''
       if (!src) continue
       // Skip avatars, icons, UI decorations
@@ -113,7 +113,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
 function fromTumblrCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Catch all Tumblr CDN images across the page
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!TUMBLR_MEDIA_RE.test(src) && !src.includes('tumblr.com') && !src.includes('.tumblr.com/')) continue
 
@@ -141,7 +141,7 @@ function fromTumblrCdnImages(pageUrl: string, pageTitle: string): MediaCandidate
 function fromPhotosetData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Photoset layouts embed data in JSON-LD-like structures or data attributes
-  for (const ps of Array.from(document.querySelectorAll('[data-photoset-layout], .photoset-grid, [id*="photoset"]'))) {
+  for (const ps of Array.from(document.querySelectorAll<HTMLImageElement>('[data-photoset-layout], .photoset-grid, [id*="photoset"]'))) {
     // Extract images from photoset
     for (const img of Array.from(ps.querySelectorAll('img'))) {
       const src = img.getAttribute('src') || img.dataset.src || ''
@@ -192,7 +192,7 @@ function fromPhotosetData(pageUrl: string, pageTitle: string): MediaCandidate[] 
 function fromInitialState(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Tumblr may embed __INITIAL_STATE__ with post media data
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('__INITIAL_STATE__') && !txt.includes('__TUMBLR__')) continue
 
@@ -226,7 +226,7 @@ function fromInitialState(pageUrl: string, pageTitle: string): MediaCandidate[] 
 function fromTumblrVideos(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Video elements in Tumblr posts
-  for (const video of Array.from(document.querySelectorAll('video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const sourceEl of Array.from(video.querySelectorAll('source'))) {
       const src = sourceEl.getAttribute('src') || ''
       if (!src) continue

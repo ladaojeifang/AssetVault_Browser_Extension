@@ -51,7 +51,7 @@ function fromSinaImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src ||
         img.getAttribute('data-src') ||
         img.getAttribute('data-original') ||
@@ -101,7 +101,7 @@ function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[]
   const out: MediaCandidate[] = []
 
   // 直接扫描 <video> 标签
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const src of [v.currentSrc, v.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
       if (!abs) continue
@@ -120,7 +120,7 @@ function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[]
 
   // 从 script 中提取 mp4/m3u8 URL
   const videoRe = /https?:\/\/(?:[^\s"'\\]*\.(?:mp4|m3u8)(?:\?[^\s"'\\]*)?)/gi
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!/(mp4|m3u8)/i.test(txt)) continue
     const hits = txt.match(videoRe) || []
@@ -147,7 +147,7 @@ function fromScriptImages(pageUrl: string, pageTitle: string): MediaCandidate[] 
   // 匹配 sinaimg.cn 图片 URL
   const sinaImgRe = /https?:\/\/[a-z0-9]*\.?sinaimg\.cn[^\s"'\\<>]*/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('sinaimg')) continue
     const hits = txt.match(sinaImgRe) || []

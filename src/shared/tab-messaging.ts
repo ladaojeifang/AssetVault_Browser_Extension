@@ -93,7 +93,7 @@ async function runPageHook<T>(
   const injected = await chrome.scripting.executeScript({
     target: { tabId },
     func: async (name: '__assetVaultResolveHd' | '__assetVaultScanBatch') => {
-      const fn = (globalThis as Record<string, () => Promise<unknown> | unknown>)[name]
+      const fn = (globalThis as unknown as Record<string, () => Promise<unknown> | unknown>)[name]
       if (typeof fn !== 'function') return null
       try {
         return await fn()

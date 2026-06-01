@@ -72,7 +72,7 @@
   outline: none;
   background: #fff;
 }
-.bs-search:focus { border-color: #3b82f6; }
+.bs-search:focus { border-color: var(--bs-accent); }
 
 .bs-tool-btn {
   padding: 4px 12px;
@@ -86,9 +86,9 @@
   white-space: nowrap;
 }
 .bs-tool-btn:hover {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #3b82f6;
+  background: var(--bs-accent-light);
+  border-color: var(--bs-accent);
+  color: var(--bs-accent);
 }
 .bs-tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -150,7 +150,7 @@
 }
 
 .bs-card.selected {
-  border-color: #3b82f6;
+  border-color: var(--bs-accent);
   box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
 }
 
@@ -174,7 +174,7 @@
   height: 100%;
   display: block;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
-  color: #3b82f6;
+  color: var(--bs-accent);
 }
 
 .bs-thumb-wrap {
@@ -260,8 +260,8 @@
 .bs-filter-item:hover { background: rgba(0,0,0,0.03); }
 
 .bs-filter-item.active {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: var(--bs-accent-light);
+  color: var(--bs-accent);
   font-weight: 600;
 }
 
@@ -275,7 +275,7 @@
 }
 
 .bs-filter-item.active .bs-filter-count {
-  background: #3b82f6;
+  background: var(--bs-accent);
   color: #fff;
 }
 
@@ -301,7 +301,7 @@
   padding: 8px 24px;
   border: none;
   border-radius: 6px;
-  background: #3b82f6;
+  background: var(--bs-accent);
   color: #fff;
   font: inherit;
   font-size: 13px;
@@ -309,7 +309,7 @@
   cursor: pointer;
 }
 
-.bs-save-btn:hover { background: #2563eb; }
+.bs-save-btn:hover { filter: brightness(0.92); }
 .bs-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── Toast ───────────────────────────────────────────────────────────── */

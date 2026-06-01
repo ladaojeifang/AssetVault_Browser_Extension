@@ -151,7 +151,7 @@ function fromPageImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromScriptData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // Flickr 在 script 标签中嵌入模型数据
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('staticflickr') && !txt.includes('live.staticflickr')) continue
 

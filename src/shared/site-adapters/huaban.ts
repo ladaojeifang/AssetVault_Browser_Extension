@@ -46,7 +46,7 @@ function fromDomImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -100,7 +100,7 @@ function fromPageScript(pageUrl: string, pageTitle: string): MediaCandidate[] {
   // 匹配花瓣 CDN 图片 URL
   const hbImgRe = /https?:\/\/[^\s"'\\<>]*(?:hbimg\.huabanimg\.com|hbimg\.huaban\.com)[^\s"'\\<>]*/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!HUABAN_CDN_RE.test(txt)) continue
     const hits = txt.match(hbImgRe) || []
@@ -132,7 +132,7 @@ function fromBackgroundImages(pageUrl: string, pageTitle: string): MediaCandidat
   ]
 
   for (const sel of bgSelectors) {
-    for (const el of Array.from(document.querySelectorAll(sel))) {
+    for (const el of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const style = el.style.backgroundImage || ''
       const match = style.match(/url\(["']?(.*?)["']?\)/i)
       const rawUrl = match ? match[1] : ''

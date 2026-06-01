@@ -24,7 +24,7 @@ function fromProductMainImage(pageUrl: string, pageTitle: string): MediaCandidat
   const tmallSelectors = ['.tm-buyer-photo img', '.tm-main-img img', '#J_ImgBooth img']
 
   for (const sel of [...taobaoSelectors, ...tmallSelectors]) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-ks-lazyload') || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -54,7 +54,7 @@ function fromDetailContent(pageUrl: string, pageTitle: string): MediaCandidate[]
     '[class*="detail"] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 64) continue
@@ -76,7 +76,7 @@ function fromDetailContent(pageUrl: string, pageTitle: string): MediaCandidate[]
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!TAOBAO_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('search')) continue

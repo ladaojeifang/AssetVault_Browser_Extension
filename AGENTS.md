@@ -19,6 +19,12 @@
 - `dist/` — 构建输出（加载到浏览器）
 - `release/` — 打包 zip
 
+## 质量
+
+- `pnpm run typecheck` — 必须通过（`build` 已依赖）
+- `pnpm run test` — 队列与 Board Saver 状态机最小回归
+- 架构说明：[docs/architecture.md](docs/architecture.md)
+
 ## 约定
 
 - 默认 API：`http://127.0.0.1:41596/api/v1`

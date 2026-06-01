@@ -64,7 +64,7 @@ function fromAlbumPhotos(pageUrl: string, pageTitle: string): MediaCandidate[] {
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -93,7 +93,7 @@ function fromAlbumPhotos(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 批量收集页面中所有豆瓣CDN图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!DOUBAN_CDN_RE.test(src)) continue
     // 过滤用户头像
@@ -124,7 +124,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
   // 从 script 中提取 doubanio CDN 图片
   const doubanImgRe = /https?:\/\/[^\s"'\\<>]*doubanio\.com[^\s"'\\<>]*\.(?:jpg|jpeg|png|gif|webp)(\?[^\s"'\\<>]*)?/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('doubanio')) continue
     const hits = txt.match(doubanImgRe) || []

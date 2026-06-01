@@ -34,7 +34,7 @@ src/
   popup/          # 扩展弹窗
   batch/          # 批量采集页
   shared/         # API、站点规则、采集逻辑
-scripts/          # build-content、postbuild、package
+scripts/          # postbuild、package（content 由 vite.config 插件构建）
 dist/             # 构建输出（加载到浏览器）
 release/          # 打包 zip
 docs/             # Web API 对接摘要
@@ -47,8 +47,6 @@ docs/             # Web API 对接摘要
 ```bash
 cd AssetVault_Browser_Extension   # 或你的克隆路径
 pnpm install
-pnpm approve-builds esbuild       # 若 pnpm 提示 ignored build scripts
-pnpm rebuild esbuild
 pnpm run build
 ```
 

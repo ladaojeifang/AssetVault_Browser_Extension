@@ -87,7 +87,7 @@ function fromPhotoShowcase(pageUrl: string, pageTitle: string): MediaCandidate[]
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.getAttribute('src') || img.currentSrc || img.dataset.src || ''
       if (!src || src.startsWith('data:')) continue
 
@@ -118,7 +118,7 @@ function fromPhotoShowcase(pageUrl: string, pageTitle: string): MediaCandidate[]
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.getAttribute('src') || ''
     if (!UNSPLASH_CDN_RE.test(src)) continue
 

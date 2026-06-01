@@ -27,7 +27,7 @@ function fromMetaTags(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromVideoElements(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const video of Array.from(document.querySelectorAll('video'))) {
+  for (const video of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     for (const src of [video.currentSrc, video.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
       if (!abs) continue
@@ -50,7 +50,7 @@ function fromScriptVariants(pageUrl: string, pageTitle: string): MediaCandidate[
   const out: MediaCandidate[] = []
   const re =
     /https?:\/\/video\.twimg\.com\/[^\s"'\\]+?(?:\.m3u8(?:\?[^\s"'\\]*)?|\.mp4(?:\?[^\s"'\\]*)?|\/ext_tw_video\/[^\s"'\\]+|\/amplify_video\/[^\s"'\\]+)/gi
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt) continue
     const hits = txt.match(re) || []

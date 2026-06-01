@@ -42,7 +42,7 @@ function fromProjectImages(pageUrl: string, pageTitle: string): MediaCandidate[]
     '.main-image img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.original || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -75,7 +75,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '[class*="body--article"] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -97,7 +97,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
 function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('dezeen.com')) continue
     const re = /https?:\/\/[^"'\s<>]*(?:dezeen\.com|cdn[^.]*dezeen\.com)[^"'\s<>]*?\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s"']*)?/gi
@@ -122,7 +122,7 @@ function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!DEZEEN_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('avatar')) continue

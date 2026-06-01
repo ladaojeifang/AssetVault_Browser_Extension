@@ -40,7 +40,7 @@ function fromArticleBody(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '.rich-text img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || ''
       if (!src) continue
       if (img.naturalWidth && img.naturalWidth < 100) continue
@@ -73,7 +73,7 @@ function fromGalleryImages(pageUrl: string, pageTitle: string): MediaCandidate[]
     '[class*="carousel-item"] img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.lazySrc || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -94,7 +94,7 @@ function fromGalleryImages(pageUrl: string, pageTitle: string): MediaCandidate[]
 
 function fromJsonLd(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const el of Array.from(document.querySelectorAll('script[type="application/ld+json"]'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('script[type="application/ld+json"]'))) {
     let data: unknown
     try {
       data = JSON.parse(el.textContent || '')

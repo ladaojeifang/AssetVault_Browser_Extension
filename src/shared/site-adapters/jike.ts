@@ -38,7 +38,7 @@ function fromPostContentImages(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -103,7 +103,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
   // 从 script 中提取即刻 CDN 图片 URL（通常为 pic1.zhimg.com 或类似）
   const jikeImgRe = /https?:\/\/[^\s"'\\<>]*(?:pic\d+\.zhimg\.com|jike\.(?:com|cn)|ruguoapp)[^\s"'\\<>]*/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('image') && !txt.includes('pic')) continue
     const hits = txt.match(jikeImgRe) || []

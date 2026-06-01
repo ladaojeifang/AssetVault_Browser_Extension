@@ -42,7 +42,7 @@ function fromPhotoListElements(pageUrl: string, pageTitle: string): MediaCandida
   ]
 
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -75,7 +75,7 @@ function fromAlbumCover(pageUrl: string, pageTitle: string): MediaCandidate[] {
   // 相册封面图
   const coverSelectors = ['.album-cover img', '.cover-img img', '.album-info img']
   for (const sel of coverSelectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src =
         img.src ||
         img.getAttribute('data-src') ||
@@ -120,7 +120,7 @@ function fromAlbumCover(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // 扫描页面中所有来自QQ相册CDN的大图
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || img.getAttribute('data-src') || ''
     if (!QQ_ALBUM_CDN_RE.test(src)) continue
     if (img.classList.contains('avatar') || src.includes('headicon')) continue

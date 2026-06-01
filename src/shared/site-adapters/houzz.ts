@@ -41,7 +41,7 @@ function fromPhotoGrid(pageUrl: string, pageTitle: string): MediaCandidate[] {
     '.hz-image img'
   ]
   for (const sel of selectors) {
-    for (const img of Array.from(document.querySelectorAll(sel))) {
+    for (const img of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = img.src || img.dataset.src || img.dataset.original || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -73,7 +73,7 @@ function fromProjectImages(pageUrl: string, pageTitle: string): MediaCandidate[]
     '[class*="space-image"] img'
   ]
   for (const sel of selectors) {
-    for (const el of Array.from(document.querySelectorAll(sel))) {
+    for (const el of Array.from(document.querySelectorAll<HTMLImageElement>(sel))) {
       const src = el.tagName === 'IMG' ? (el as HTMLImageElement).src : el.style.backgroundImage?.replace(/^url\(['"]?|['"]?\)$/, '') || ''
       if (!src) continue
       const abs = toAbsoluteUrl(src, pageUrl)
@@ -94,7 +94,7 @@ function fromProjectImages(pageUrl: string, pageTitle: string): MediaCandidate[]
 
 function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('.houzz.com') && !txt.includes('st.houzz')) continue
     const re = /https?:\/\/(?:st\.houzz|[^"'\s]*houzz\.(?:com|net))[^"'\s<>]*?\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s"']*)?/gi
@@ -119,7 +119,7 @@ function fromEmbeddedData(pageUrl: string, pageTitle: string): MediaCandidate[] 
 
 function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src || ''
     if (!HOUZZ_CDN_RE.test(src)) continue
     if (src.includes('icon') || src.includes('logo') || src.includes('avatar') || src.includes('user-photo')) continue

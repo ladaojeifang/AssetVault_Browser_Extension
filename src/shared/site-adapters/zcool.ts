@@ -79,7 +79,7 @@ function fromWorkShowImages(pageUrl: string, pageTitle: string): MediaCandidate[
   ]
 
   for (const sel of selectors) {
-    const imgs = document.querySelectorAll(sel)
+    const imgs = document.querySelectorAll<HTMLImageElement>(sel)
     for (const el of imgs) {
       const src =
         (el as HTMLImageElement).currentSrc ||
@@ -114,7 +114,7 @@ function fromScriptData(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
   // 站酷在页面中嵌入了作品数据 JSON
   // 常见模式：__INITIAL_STATE__, window.__data__, 或内联 JSON
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt) continue
 

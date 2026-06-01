@@ -1,7 +1,7 @@
 import type { MediaCandidate } from '../types'
 import { dedupeCandidates, makeMediaCandidate, toAbsoluteUrl } from '../media-candidate-core'
 
-const MJ_CDN_HOST = 'cdn.midjourney.com'
+const MJ_CDN_HOST = /cdn\.midjourney\.com/i
 
 /** 清理 MJ 图片 URL：移除下载后缀、格式转换等 */
 function cleanMjUrl(raw: string): string {
@@ -27,7 +27,7 @@ function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
 
   // 直接扫描 MJ CDN 图片
-  for (const img of Array.from(document.querySelectorAll('img'))) {
+  for (const img of Array.from(document.querySelectorAll<HTMLImageElement>('img'))) {
     const src = img.src ||
       img.getAttribute('data-src') ||
       img.getAttribute('srcset')?.split(',').pop()?.trim().split(/\s+/)?.[0] ||
@@ -56,7 +56,7 @@ function fromCdnImages(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromAnchorLinks(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   // MJ 页面中链接也可能指向图片
-  for (const a of Array.from(document.querySelectorAll('a[href*="midjourney.com"]'))) {
+  for (const a of Array.from(document.querySelectorAll<HTMLImageElement>('a[href*="midjourney.com"]'))) {
     const href = a.getAttribute('href') || ''
     if (!href || /\.(png|jpg|jpeg|webp|gif)(\?|$)/i.test(href)) continue
 
@@ -103,7 +103,7 @@ function fromScriptExtract(pageUrl: string, pageTitle: string): MediaCandidate[]
 
   for (const s of Array.from(document.querySelectorAll('script'))) {
     const txt = s.textContent || ''
-    if (!txt.includes(MJ_CDN_HOST)) continue
+    if (!MJ_CDN_HOST.test(txt)) continue
     const hits = txt.match(mjUrlRe) || []
     for (const hit of hits) {
       const cleaned = cleanMjUrl(hit)

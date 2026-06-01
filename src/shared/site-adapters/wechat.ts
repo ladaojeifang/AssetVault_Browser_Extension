@@ -119,7 +119,7 @@ function fromScriptExtraction(pageUrl: string, pageTitle: string): MediaCandidat
   const out: MediaCandidate[] = []
   const cdnRe = /(https?:\/\/[^"'\s<>]*(?:mmbiz\.qpic|qpic\.cn)[^"'\s<>]*)/gi
 
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt.includes('mmbiz') && !txt.includes('qpic')) continue
 
@@ -147,7 +147,7 @@ function fromDomScan(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
 
   // Check background-image styles that might contain mmbiz URLs
-  for (const el of Array.from(document.querySelectorAll('[style*="background"]'))) {
+  for (const el of Array.from(document.querySelectorAll<HTMLImageElement>('[style*="background"]'))) {
     if (!(el instanceof HTMLElement)) continue
     try {
       const bg = getComputedStyle(el).backgroundImage
@@ -173,7 +173,7 @@ function fromDomScan(pageUrl: string, pageTitle: string): MediaCandidate[] {
   }
 
   // Check video poster attributes
-  for (const v of Array.from(document.querySelectorAll('video'))) {
+  for (const v of Array.from(document.querySelectorAll<HTMLVideoElement>('video'))) {
     const poster = v.poster || ''
     if (/mmbiz|qpic\.cn/i.test(poster)) {
       const abs = toAbsoluteUrl(poster, pageUrl)

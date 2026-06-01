@@ -93,14 +93,12 @@ function getItemKind(item: SelectableCandidate): string {
 
 function isGif(item: SelectableCandidate): boolean {
   if ('sourceType' in item) return item.kind === 'gif'
-  const ext = getUrlExt(item.url)
-  return ext === 'gif' || item.kind === 'gif'
+  return getUrlExt(item.url) === 'gif'
 }
 
 function isSvg(item: SelectableCandidate): boolean {
   if ('sourceType' in item) return false
-  const ext = getUrlExt(item.url)
-  return ext === 'svg' || item.kind === 'svg'
+  return getUrlExt(item.url) === 'svg'
 }
 
 function isVideo(item: SelectableCandidate): boolean {
@@ -501,7 +499,7 @@ function setFormat(fmt: FilterFormat): void {
   // 更新按钮激活状态
   const group = document.querySelector('.bs-filter-format')
   if (group) {
-    group.querySelectorAll('.bs-filter-btn').forEach((btn) => {
+    group.querySelectorAll<HTMLElement>('.bs-filter-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.filterFmt === fmt)
     })
   }
@@ -523,7 +521,7 @@ function setSort(field: SortField): void {
   // 更新按钮激活状态
   const group = document.querySelector('.bs-filter-sort')
   if (group) {
-    group.querySelectorAll('.bs-sort-btn').forEach((btn) => {
+    group.querySelectorAll<HTMLElement>('.bs-sort-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.sortField === field)
     })
   }
@@ -560,7 +558,7 @@ function resetAllFilters(): void {
   // 重置 UI 控件
   const formatGroup = document.querySelector('.bs-filter-format')
   if (formatGroup) {
-    formatGroup.querySelectorAll('.bs-filter-btn').forEach((btn) => {
+    formatGroup.querySelectorAll<HTMLElement>('.bs-filter-btn').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.filterFmt === 'all')
     })
   }
@@ -579,7 +577,7 @@ function resetAllFilters(): void {
 
   const sortGroup = document.querySelector('.bs-filter-sort')
   if (sortGroup) {
-    sortGroup.querySelectorAll('.bs-sort-btn').forEach((btn) => {
+    sortGroup.querySelectorAll<HTMLElement>('.bs-sort-btn').forEach((btn) => {
       const isActive = btn.dataset.sortField === 'default'
       btn.classList.toggle('active', isActive)
       // 恢复原始文字

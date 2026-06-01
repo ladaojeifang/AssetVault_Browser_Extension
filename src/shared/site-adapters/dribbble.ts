@@ -53,7 +53,7 @@ function fromShotMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
   // Shot images
   for (const img of Array.from(
-    document.querySelectorAll('.shot-media img, img[src*="cdn.dribbble.com"]')
+    document.querySelectorAll<HTMLImageElement>('.shot-media img, img[src*="cdn.dribbble.com"]'),
   )) {
     const src = img.getAttribute('src') || img.currentSrc || ''
     if (!src || src.startsWith('data:')) continue
@@ -73,7 +73,7 @@ function fromShotMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
 
   // Shot videos (GIF-as-video or MP4 shots)
   for (const video of Array.from(
-    document.querySelectorAll('.shot-media video, .gif-player video')
+    document.querySelectorAll<HTMLVideoElement>('.shot-media video, .gif-player video'),
   )) {
     for (const src of [video.currentSrc, video.src]) {
       const abs = toAbsoluteUrl(src || '', pageUrl)
@@ -114,7 +114,7 @@ function fromShotMedia(pageUrl: string, pageTitle: string): MediaCandidate[] {
 function fromDribbbleScript(pageUrl: string, pageTitle: string): MediaCandidate[] {
   const out: MediaCandidate[] = []
   const cdnRe = /https?:\/\/cdn\.dribbble\.com[^\s"'\\]+?\.(?:mp4|gif|png|jpg|jpeg|webp)(\?[^\s"'\\]*)?/gi
-  for (const s of Array.from(document.querySelectorAll('script'))) {
+  for (const s of Array.from(document.querySelectorAll<HTMLImageElement>('script'))) {
     const txt = s.textContent || ''
     if (!txt) continue
     const hits = txt.match(cdnRe) || []
