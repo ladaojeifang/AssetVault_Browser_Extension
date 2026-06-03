@@ -12,6 +12,12 @@
     "default_title": "AssetVault Pro",
     "default_popup": "popup.html"
   },
+  "commands": {
+    "batch-collect": {
+      "suggested_key": { "default": "Ctrl+Shift+B", "mac": "MacCtrl+Shift+B" },
+      "description": "在当前页面打开批量收藏面板"
+    }
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

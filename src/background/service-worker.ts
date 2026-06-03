@@ -42,17 +42,20 @@ async function executeBatchImportWithProgress(args: {
   const { items, tagIds, reportTabId, sourceUrl } = args
   const prefs = await getPreferences()
 
+  // Split data URIs from regular URLs — data URIs use importFromDataUrl
+  const regularItems = items.filter(it => !it.url.startsWith('data:'))
+  const dataUriItems = items.filter(it => it.url.startsWith('data:'))
+
   const total = items.length
   let completed = 0
   const queue = new ConcurrencyQueue(BATCH_DOWNLOAD_CONCURRENCY)
 
-  // Split into sub-batches to respect API batch limits while controlling concurrency
   const results: Array<{ imported: string[]; skipped: Array<{ url: string; reason: string; existingAssetId?: string }>; errors: Array<{ url: string; message: string }> }> = []
 
-  // Process in chunks that fit within concurrency limits
+  // Process regular URLs in chunks
   const chunkSize = BATCH_DOWNLOAD_CONCURRENCY
-  for (let i = 0; i < total; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize)
+  for (let i = 0; i < regularItems.length; i += chunkSize) {
+    const chunk = regularItems.slice(i, i + chunkSize)
     await queue.add(async () => {
       const batch = await importFromUrlBatch({
         items: chunk,
@@ -62,7 +65,6 @@ async function executeBatchImportWithProgress(args: {
       if (tagIds?.length && batch.imported.length) {
         await assignTags(batch.imported, tagIds)
       }
-      // Set sourceUrl for each newly imported asset
       if (sourceUrl && batch.imported.length) {
         await Promise.allSettled(
           batch.imported.map(id => updateAsset({ id, sourceUrl }))
@@ -70,15 +72,43 @@ async function executeBatchImportWithProgress(args: {
       }
       results.push(batch)
       completed += chunk.length
-
-      // Report progress to tab
       if (reportTabId && total > 1) {
-        try {
-          void notify(
-            reportTabId,
-            `批量导入进度：${Math.min(completed, total)}/${total}`
+        try { void notify(reportTabId, `批量导入进度：${Math.min(completed, total)}/${total}`) } catch { /* */ }
+      }
+    })
+  }
+
+  // Process data URIs individually via importFromDataUrl
+  for (const item of dataUriItems) {
+    await queue.add(async () => {
+      try {
+        const result = await importFromDataUrl({
+          dataUrl: item.url,
+          filename: item.filename,
+          targetFolderId: prefs.defaultFolderId || undefined,
+          duplicatePolicy: prefs.duplicatePolicy
+        })
+        const batchResult = {
+          imported: result.skipped ? [] : ([result.assetId!].filter(Boolean) as string[]),
+          skipped: result.skipped ? ([{ url: item.url, reason: 'duplicate' }]) : [],
+          errors: [] as Array<{ url: string; message: string }>
+        }
+        if (tagIds?.length && batchResult.imported.length) {
+          await assignTags(batchResult.imported, tagIds)
+        }
+        if (sourceUrl && batchResult.imported.length) {
+          await Promise.allSettled(
+            batchResult.imported.map(id => updateAsset({ id, sourceUrl }))
           )
-        } catch { /* ignore notification errors */ }
+        }
+        results.push(batchResult)
+        completed++
+        if (reportTabId && total > 1) {
+          try { void notify(reportTabId, `批量导入进度：${Math.min(completed, total)}/${total}`) } catch { /* */ }
+        }
+      } catch (e) {
+        results.push({ imported: [], skipped: [], errors: [{ url: item.url, message: e instanceof Error ? e.message : String(e) }] })
+        completed++
       }
     })
   }
@@ -212,6 +242,32 @@ chrome.runtime.onMessage.addListener((message: BgMessage, _sender, sendResponse)
     }
   })()
   return true
+})
+
+// ── Keyboard shortcut ──────────────────────────────────────────────
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== 'batch-collect') return
+  void (async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id) return
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'OPEN_BOARD_SAVER' })
+    } catch {
+      // Page may not have content script injected — inject it
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js'],
+        })
+        // Wait for injection, then retry
+        await new Promise(r => setTimeout(r, 300))
+        await chrome.tabs.sendMessage(tab.id, { type: 'OPEN_BOARD_SAVER' })
+      } catch {
+        console.warn('[AssetVault] Failed to open board saver via shortcut')
+      }
+    }
+  })()
 })
 
 async function routeMessage(message: BgMessage, sender: chrome.runtime.MessageSender): Promise<BgResponse> {

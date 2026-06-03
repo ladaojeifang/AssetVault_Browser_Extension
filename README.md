@@ -53,7 +53,7 @@ pnpm run build
 - Chrome：`chrome://extensions` → **加载已解压的扩展程序** → 选择本仓库 **`dist`** 目录（见 `LOAD-EXTENSION-HERE.txt`）。
 - 修改后 `pnpm run build`，在扩展页 **重新加载**。
 
-可选监听：
+可选监听（ESM 入口 + content IIFE 均会重建；改 `src/content` / `board-saver` 后请在扩展页重新加载）：
 
 ```bash
 pnpm run dev

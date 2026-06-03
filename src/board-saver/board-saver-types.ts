@@ -10,6 +10,8 @@ export type BoardSaverItem = {
   selected: boolean
   discoveredAt: number
   source: string
+  /** True if enlargeImageUrl returned a different URL (HD version). */
+  isEnlarged: boolean
 }
 
 export const BATCH_IMPORT_SIZE = 20

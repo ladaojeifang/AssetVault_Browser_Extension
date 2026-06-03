@@ -25,6 +25,8 @@ Service Worker (background.js)
 
 **构建命令：** 仅 `vite build`（主配置打 ESM；`closeBundle` 插件再打 content IIFE 到同一 `dist/`）。
 
+**开发监听：** `pnpm run dev` 时，`src/content/` 与 `src/board-saver/` 会通过 `addWatchFile` 注册到 Rollup watch，改动后会触发重建并更新 `dist/content.js`。
+
 **为何 content 仍单独一档：** 不是第二套工具，而是 **同一 Vite/Rollup 下无法用一次 output 混用 ESM + IIFE**，故两次 build pass。`src/shared` 仍会在 content 与各 ESM 入口里**各打一份**（扩展场景无法共用一个 runtime chunk）。
 
 **历史：** 曾用独立 `esbuild` 脚本打 content；已合并进 Vite，避免双引擎维护成本。
