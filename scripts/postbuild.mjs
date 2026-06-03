@@ -11,6 +11,9 @@ mkdirSync(dist, { recursive: true })
 // manifest
 copyFileSync(join(root, 'src/manifest.json'), join(dist, 'manifest.json'))
 
+// offscreen (blob URLs for screenshot file import)
+copyFileSync(join(root, 'src/offscreen/offscreen.html'), join(dist, 'offscreen.html'))
+
 // static pages
 for (const page of ['popup', 'batch']) {
   copyFileSync(join(root, `src/${page}/${page}.html`), join(dist, `${page}.html`))

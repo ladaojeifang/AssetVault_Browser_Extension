@@ -1,12 +1,14 @@
+import { execFile } from 'node:child_process'
 import { readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import { defineConfig, build as viteBuild, type Plugin } from 'vite'
 
 const root = __dirname
+const execFileAsync = promisify(execFile)
 
-const SOURCE_EXTS = new Set(['.ts', '.tsx', '.css'])
+const SOURCE_EXTS = new Set(['.ts', '.tsx', '.css', '.html', '.json'])
 
-/** Collect source files under a directory for Rollup watch registration. */
 function walkSourceFiles(dir: string, out: string[] = []): string[] {
   let entries
   try {
@@ -25,8 +27,21 @@ function walkSourceFiles(dir: string, out: string[] = []): string[] {
   return out
 }
 
-/** Paths that only feed content.js (not main ESM entry graphs). */
 const CONTENT_ONLY_WATCH_DIRS = ['src/content', 'src/board-saver'] as const
+
+const FULLPAGE_INJECTED_WATCH_FILES = [
+  'src/shared/fullpage-injected.ts',
+  'src/shared/fullpage-page-helpers.ts',
+] as const
+
+/** Static assets copied by scripts/postbuild.mjs (not Vite JS entries). */
+const POSTBUILD_WATCH_PATHS = [
+  'src/manifest.json',
+  'src/content/content.css',
+  'src/board-saver/board-saver-bridge.css',
+] as const
+
+const POSTBUILD_WATCH_DIRS = ['src/popup', 'src/batch'] as const
 
 async function buildContentIife(): Promise<void> {
   await viteBuild({
@@ -50,18 +65,46 @@ async function buildContentIife(): Promise<void> {
   console.log('[vite] dist/content.js (IIFE)')
 }
 
-/**
- * After ESM entries are written to dist/, build content.js as IIFE.
- * Registers content-only sources with Rollup watch so `pnpm run dev` rebuilds
- * content when board-saver / content files change (they are not main inputs).
- */
+/** Page inject via chrome.scripting.executeScript files — must be classic IIFE (no import). */
+async function buildFullpageInjectedIife(): Promise<void> {
+  await viteBuild({
+    configFile: false,
+    base: '',
+    build: {
+      outDir: resolve(root, 'dist'),
+      emptyOutDir: false,
+      sourcemap: true,
+      rollupOptions: {
+        input: resolve(root, 'src/shared/fullpage-injected.ts'),
+        output: {
+          format: 'iife',
+          entryFileNames: 'fullpage-injected.js',
+          inlineDynamicImports: true,
+          name: 'AssetVaultFullpageInjected',
+        },
+      },
+    },
+  })
+  console.log('[vite] dist/fullpage-injected.js (IIFE)')
+}
+
+async function buildPageInjectedIifeBundles(): Promise<void> {
+  await buildContentIife()
+  await buildFullpageInjectedIife()
+}
+
+async function runPostbuild(): Promise<void> {
+  await execFileAsync(process.execPath, ['scripts/postbuild.mjs'], { cwd: root })
+  console.log('[vite] postbuild copied static assets')
+}
+
 function contentScriptIifePlugin(): Plugin {
   let watchMode = false
   let contentBuildPromise: Promise<void> | null = null
 
   const scheduleContentBuild = (): Promise<void> => {
     if (!contentBuildPromise) {
-      contentBuildPromise = buildContentIife().finally(() => {
+      contentBuildPromise = buildPageInjectedIifeBundles().finally(() => {
         contentBuildPromise = null
       })
     }
@@ -81,6 +124,9 @@ function contentScriptIifePlugin(): Plugin {
           this.addWatchFile(file)
         }
       }
+      for (const rel of FULLPAGE_INJECTED_WATCH_FILES) {
+        this.addWatchFile(resolve(root, rel))
+      }
     },
     async closeBundle() {
       await scheduleContentBuild()
@@ -88,9 +134,46 @@ function contentScriptIifePlugin(): Plugin {
   }
 }
 
+/** Copy manifest, HTML/CSS, icons after each dev/build pass. */
+function postbuildStaticPlugin(): Plugin {
+  let watchMode = false
+  let postbuildPromise: Promise<void> | null = null
+
+  const schedulePostbuild = (): Promise<void> => {
+    if (!postbuildPromise) {
+      postbuildPromise = runPostbuild().finally(() => {
+        postbuildPromise = null
+      })
+    }
+    return postbuildPromise
+  }
+
+  return {
+    name: 'assetvault-postbuild-static',
+    apply: 'build',
+    configResolved(config) {
+      watchMode = config.build.watch !== null && config.build.watch !== false
+    },
+    buildStart() {
+      if (!watchMode) return
+      for (const rel of POSTBUILD_WATCH_PATHS) {
+        this.addWatchFile(resolve(root, rel))
+      }
+      for (const rel of POSTBUILD_WATCH_DIRS) {
+        for (const file of walkSourceFiles(resolve(root, rel))) {
+          this.addWatchFile(file)
+        }
+      }
+    },
+    async closeBundle() {
+      await schedulePostbuild()
+    },
+  }
+}
+
 export default defineConfig({
   base: '',
-  plugins: [contentScriptIifePlugin()],
+  plugins: [contentScriptIifePlugin(), postbuildStaticPlugin()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
@@ -100,6 +183,7 @@ export default defineConfig({
         background: resolve(root, 'src/background/service-worker.ts'),
         popup: resolve(root, 'src/popup/popup.ts'),
         batch: resolve(root, 'src/batch/batch.ts'),
+        offscreen: resolve(root, 'src/offscreen/offscreen.ts'),
         'injected-shot-ui': resolve(root, 'src/shared/injected-shot-ui.ts'),
         'injected-x-scan': resolve(root, 'src/shared/injected-x-scan.ts'),
       },
@@ -107,6 +191,7 @@ export default defineConfig({
         entryFileNames: (chunk) => {
           if (chunk.name === 'injected-shot-ui') return 'injected-shot-ui.js'
           if (chunk.name === 'injected-x-scan') return 'injected-x-scan.js'
+          if (chunk.name === 'offscreen') return 'offscreen.js'
           return '[name].js'
         },
         chunkFileNames: 'chunks/[name]-[hash].js',

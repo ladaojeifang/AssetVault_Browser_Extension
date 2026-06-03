@@ -148,12 +148,39 @@ async function init(): Promise<void> {
 
       try {
         if (mode === 'fullpage') {
-          const resp = await chrome.runtime.sendMessage({ type: 'SCREENSHOT_FULLPAGE', format: 'jpeg' })
-          if (!resp?.ok) {
-            alert((resp as { error?: string })?.error ?? '整页截图失败')
-            return
-          }
-          window.close()
+          const captureTabId = tab.id
+          const done = await new Promise<boolean>((resolve) => {
+            const timeout = window.setTimeout(() => {
+              chrome.runtime.onMessage.removeListener(onDone)
+              resolve(false)
+            }, 30 * 60 * 1000)
+            const onDone = (msg: unknown) => {
+              const m = msg as { type?: string; tabId?: number; ok?: boolean; error?: string }
+              if (m?.type !== 'FULLPAGE_CAPTURE_DONE' || m.tabId !== captureTabId) return
+              chrome.runtime.onMessage.removeListener(onDone)
+              window.clearTimeout(timeout)
+              if (!m.ok) alert(m.error ?? '整页截图失败')
+              resolve(m.ok === true)
+            }
+            chrome.runtime.onMessage.addListener(onDone)
+            void chrome.runtime
+              .sendMessage({ type: 'SCREENSHOT_FULLPAGE', format: 'jpeg' })
+              .then((resp) => {
+                if (!resp?.ok) {
+                  chrome.runtime.onMessage.removeListener(onDone)
+                  window.clearTimeout(timeout)
+                  alert((resp as { error?: string })?.error ?? '整页截图失败')
+                  resolve(false)
+                }
+              })
+              .catch((e) => {
+                chrome.runtime.onMessage.removeListener(onDone)
+                window.clearTimeout(timeout)
+                alert(e instanceof Error ? e.message : String(e))
+                resolve(false)
+              })
+          })
+          if (done) window.close()
           return
         }
         // Always inject standalone shot UI to avoid depending on page content listener lifecycle.

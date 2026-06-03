@@ -5,8 +5,10 @@ export type BgMessage =
   | { type: 'IMPORT_META'; meta: CollectMeta; tagIds?: string[] }
   | {
       type: 'IMPORT_BATCH'
-      items: Array<{ url: string; filename?: string }>
+      items: Array<{ url: string; filename?: string; headers?: Record<string, string> }>
       tagIds?: string[]
+      sourceUrl?: string
+      duplicatePolicy?: 'use_existing' | 'import_copy'
     }
   | {
       type: 'SCREENSHOT_CROP_RECT'
@@ -17,6 +19,7 @@ export type BgMessage =
     }
   | { type: 'SCREENSHOT_FULLPAGE'; format?: 'jpeg' | 'png' }
   | { type: 'SCREENSHOT_ABORT' }
+  | { type: 'FULLPAGE_CAPTURE_DONE'; tabId: number; ok: boolean; error?: string }
   | { type: 'RESOLVE_VIDEO_CANDIDATES' }
   | { type: 'RESCAN_PAGE_MEDIA'; tabId?: number; pageUrl?: string }
   | {

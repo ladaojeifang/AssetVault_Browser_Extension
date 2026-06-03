@@ -24,4 +24,4 @@
 
 - 禁止新增 `@ts-ignore`（无审查理由时）
 - 站点适配器新增图片扫描优先使用 `querySelectorAll<HTMLImageElement>(...)`
-- 可选复用 `src/shared/dom-utils.ts`
+- Board Saver 懒加载滚动使用 `src/shared/auto-scroll-engine.ts`；批量导入统计见 `board-saver-import.ts`

@@ -42,6 +42,7 @@ export class AutoScrollEngine {
   private _checkTimerId: ReturnType<typeof setInterval> | null = null
   private _bottomDetected = false
   private _destroyed = false
+  private _lastScrollHeight = 0
 
   constructor(options: AutoScrollOptions = {}) {
     this._speed = options.speed ?? DEFAULT_SPEED
@@ -67,6 +68,7 @@ export class AutoScrollEngine {
     if (this._destroyed) return
     if (this._state === 'scrolling') return
     this._bottomDetected = false
+    this._lastScrollHeight = 0
     this._state = 'scrolling'
     this._lastTimestamp = performance.now()
     this._startRafLoop()
@@ -179,6 +181,18 @@ export class AutoScrollEngine {
       }
       const prog = this.getProgress()
       this._onTick?.(prog)
+
+      if (
+        this._bottomDetected &&
+        prog.scrollHeight > this._lastScrollHeight + 80
+      ) {
+        this._bottomDetected = false
+        if (this._state === 'done') {
+          this._state = 'scrolling'
+          this._startRafLoop()
+        }
+      }
+      this._lastScrollHeight = prog.scrollHeight
 
       if (
         !this._bottomDetected &&

@@ -21,10 +21,35 @@ import {
 import type { BgMessage, BgResponse } from '../shared/messages'
 import { ConcurrencyQueue } from '../shared/concurrency'
 import {
-  FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
-  FULLPAGE_MAX_SCROLL_SEGMENTS,
+  downloadBlobToRelativeFilename,
+  ensureExtensionDownloadFilenameHook
+} from '../shared/chrome-download-blob'
+import {
+  dataUrlFitsDirectImport,
+  DATAURL_MAX_DIRECT_JSON_CHARS,
+  uniqueTempDownloadFilename,
+} from '../shared/data-url-import'
+import {
+  FULLPAGE_IMPORT_CHUNK_MAX_BYTES,
   planFullpageCapturePositions,
 } from '../shared/fullpage-capture'
+import { FullpageOutputBuffer } from '../shared/fullpage-output-buffer'
+import { supportsFullPageSessionApi, resetFullPageSessionSupportCache } from '../shared/fullpage-session-api'
+import {
+  importFullPageViaSession,
+  mapFullPageFinishWarnings
+} from '../shared/fullpage-session-import'
+import {
+  FULLPAGE_KEEP_STRIP_FILES_AFTER_FINISH,
+  fullPageInspectSessionId,
+} from '../shared/fullpage-session-paths'
+import {
+  applyFullpageLastFrameFloatingHides,
+  readFullpageScrollMetricsInTab,
+  restoreFullpageInTab,
+  scrollFullpageToCss,
+  setupFullpageInTab,
+} from '../shared/fullpage-tab-bridge'
 
 /** Default concurrency for batch download operations. */
 const BATCH_DOWNLOAD_CONCURRENCY = 2
@@ -38,9 +63,11 @@ async function executeBatchImportWithProgress(args: {
   tagIds?: string[]
   reportTabId?: number
   sourceUrl?: string
+  duplicatePolicy?: 'use_existing' | 'import_copy'
 }): Promise<{ ok: true; batch: unknown }> {
   const { items, tagIds, reportTabId, sourceUrl } = args
   const prefs = await getPreferences()
+  const duplicatePolicy = args.duplicatePolicy ?? prefs.duplicatePolicy
 
   // Split data URIs from regular URLs — data URIs use importFromDataUrl
   const regularItems = items.filter(it => !it.url.startsWith('data:'))
@@ -57,20 +84,29 @@ async function executeBatchImportWithProgress(args: {
   for (let i = 0; i < regularItems.length; i += chunkSize) {
     const chunk = regularItems.slice(i, i + chunkSize)
     await queue.add(async () => {
-      const batch = await importFromUrlBatch({
-        items: chunk,
-        targetFolderId: prefs.defaultFolderId || undefined,
-        duplicatePolicy: prefs.duplicatePolicy
-      })
-      if (tagIds?.length && batch.imported.length) {
-        await assignTags(batch.imported, tagIds)
+      try {
+        const batch = await importFromUrlBatch({
+          items: chunk,
+          targetFolderId: prefs.defaultFolderId || undefined,
+          duplicatePolicy,
+        })
+        if (tagIds?.length && batch.imported.length) {
+          await assignTags(batch.imported, tagIds)
+        }
+        if (sourceUrl && batch.imported.length) {
+          await Promise.allSettled(
+            batch.imported.map(id => updateAsset({ id, sourceUrl }))
+          )
+        }
+        results.push(batch)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        results.push({
+          imported: [],
+          skipped: [],
+          errors: chunk.map(it => ({ url: it.url, message: msg })),
+        })
       }
-      if (sourceUrl && batch.imported.length) {
-        await Promise.allSettled(
-          batch.imported.map(id => updateAsset({ id, sourceUrl }))
-        )
-      }
-      results.push(batch)
       completed += chunk.length
       if (reportTabId && total > 1) {
         try { void notify(reportTabId, `批量导入进度：${Math.min(completed, total)}/${total}`) } catch { /* */ }
@@ -82,11 +118,12 @@ async function executeBatchImportWithProgress(args: {
   for (const item of dataUriItems) {
     await queue.add(async () => {
       try {
-        const result = await importFromDataUrl({
+        const result = await importDataUrlViaDownload({
           dataUrl: item.url,
-          filename: item.filename,
+          filename: item.filename ?? `import-${Date.now()}.png`,
           targetFolderId: prefs.defaultFolderId || undefined,
-          duplicatePolicy: prefs.duplicatePolicy
+          duplicatePolicy,
+          apiTimeoutMs: 30_000,
         })
         const batchResult = {
           imported: result.skipped ? [] : ([result.assetId!].filter(Boolean) as string[]),
@@ -128,19 +165,48 @@ async function executeBatchImportWithProgress(args: {
 
 const MENU_ID = 'assetvault-save-image'
 
-/** Active full-page screenshot job; set abort flag via SCREENSHOT_ABORT. */
-let activeFullpageCapture: { tabId: number; abort: boolean } | null = null
+/** Per-tab full-page jobs; abort via SCREENSHOT_ABORT (matches tab when known). */
+const activeFullpageCaptures = new Map<number, { abort: boolean }>()
+
+function setFullpageCaptureActive(tabId: number): void {
+  activeFullpageCaptures.set(tabId, { abort: false })
+}
+
+function isFullpageCaptureAborted(tabId: number): boolean {
+  return activeFullpageCaptures.get(tabId)?.abort === true
+}
+
+function clearFullpageCaptureActive(tabId: number): void {
+  activeFullpageCaptures.delete(tabId)
+}
+
+function abortAllFullpageCaptures(): void {
+  for (const state of activeFullpageCaptures.values()) {
+    state.abort = true
+  }
+}
+
+function broadcastFullpageCaptureDone(tabId: number, ok: boolean, error?: string): void {
+  const payload: BgMessage = { type: 'FULLPAGE_CAPTURE_DONE', tabId, ok, error }
+  void chrome.runtime.sendMessage(payload).catch(() => null)
+}
+
+function isAllowPartialCaptureStop(reason: string): boolean {
+  return (
+    isCaptureQuotaError({ message: reason } as Error) ||
+    reason.includes('截图频率') ||
+    reason.includes('quota') ||
+    reason.includes('MAX_CAPTURE_VISIBLE_TAB')
+  )
+}
 
 /** Chrome MV3: ~2 captureVisibleTab calls per second per extension. */
 const CAPTURE_MIN_GAP_MS = 650
 let lastCaptureVisibleTabAt = 0
 
-// 整页截图思路：滚动分段 + 重叠，隐藏 fixed/sticky，暂停视频，避免拼接缝和重复内容。
-const FULLPAGE_AFTER_SCROLL_MS = 520
-// 保守的 Canvas 限制：避免 OffscreenCanvas / GPU 纹理上限导致转 blob 失败。
-const FULLPAGE_CANVAS_MAX_SIDE = 16384
-const FULLPAGE_CANVAS_MAX_PIXELS = 80_000_000
+// 整页截图：滚动分段 + 重叠；浮层/滚动逻辑见 fullpage-injected + fullpage-tab-bridge。
 const FULLPAGE_IMPORT_API_TIMEOUT_MS = 120_000
+const FULLPAGE_REMETRICS_EVERY_SEGMENTS = 8
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
@@ -175,7 +241,10 @@ async function captureVisibleTabThrottled(
   throw new Error('截图频率过高，请稍后再试')
 }
 
+ensureExtensionDownloadFilenameHook()
+
 chrome.runtime.onInstalled.addListener(() => {
+  ensureExtensionDownloadFilenameHook()
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
@@ -288,7 +357,8 @@ async function routeMessage(message: BgMessage, sender: chrome.runtime.MessageSe
         items: message.items,
         tagIds: message.tagIds,
         reportTabId: tab?.id,
-        sourceUrl: (message as unknown as { sourceUrl?: string }).sourceUrl || undefined
+        sourceUrl: message.sourceUrl,
+        duplicatePolicy: message.duplicatePolicy,
       })
       return result
     }
@@ -344,19 +414,29 @@ async function routeMessage(message: BgMessage, sender: chrome.runtime.MessageSe
       if (!tab.id) return { ok: false, error: '无法定位当前标签页' }
       const prefs = await getPreferences()
       const tabId = tab.id
-      void stitchAndImportFullPage({ tab, prefs, format: message.format }).catch(async (e) => {
-        const msg = e instanceof Error ? e.message : String(e)
-        const userMsg =
-          isCaptureQuotaError(e) || msg.includes('截图频率')
-            ? '整页截图过快，请稍候再试（Chrome 限制每秒截图次数）'
-            : msg
-        await notify(tabId, userMsg)
-      })
+      void stitchAndImportFullPage({ tab, prefs, format: message.format })
+        .then(() => {
+          broadcastFullpageCaptureDone(tabId, true)
+        })
+        .catch(async (e) => {
+          const msg = e instanceof Error ? e.message : String(e)
+          const userMsg =
+            isCaptureQuotaError(e) || msg.includes('截图频率')
+              ? '整页截图过快，请稍候再试（Chrome 限制每秒截图次数）'
+              : msg
+          await notify(tabId, userMsg)
+          broadcastFullpageCaptureDone(tabId, false, userMsg)
+        })
       return { ok: true, started: true }
     }
     case 'SCREENSHOT_ABORT': {
-      if (activeFullpageCapture) {
-        activeFullpageCapture.abort = true
+      const abortTabId = sender.tab?.id
+      if (abortTabId != null) {
+        const state = activeFullpageCaptures.get(abortTabId)
+        if (state) state.abort = true
+        else abortAllFullpageCaptures()
+      } else {
+        abortAllFullpageCaptures()
       }
       const tab = sender.tab?.id
         ? sender.tab
@@ -411,21 +491,17 @@ function filenameFromUrl(url: string, fallbackTitle: string): string {
 }
 
 async function notify(tabId: number, text: string): Promise<void> {
-  let toastOk = false
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'TOAST', text })
-    toastOk = true
   } catch {
     console.info('[AssetVault]', text)
   }
-  if (!toastOk) {
-    try {
-      const short = text.length > 6 ? `${text.slice(0, 5)}…` : text
-      await chrome.action.setBadgeBackgroundColor({ color: '#2563eb' })
-      await chrome.action.setBadgeText({ text: short || '…' })
-    } catch {
-      /* ignore */
-    }
+  try {
+    const short = text.length > 6 ? `${text.slice(0, 5)}…` : text
+    await chrome.action.setBadgeBackgroundColor({ color: '#2563eb' })
+    await chrome.action.setBadgeText({ text: short || '…' })
+  } catch {
+    /* ignore */
   }
 }
 
@@ -456,48 +532,19 @@ function removeDownloadArtifacts(downloadId: number): Promise<void> {
   })
 }
 
-function estimateDataUrlBytes(dataUrl: string): number {
-  const comma = dataUrl.indexOf(',')
-  if (comma < 0) return dataUrl.length
-  const b64 = dataUrl.slice(comma + 1)
-  return Math.floor((b64.length * 3) / 4)
-}
-
-async function importDataUrlViaDownload(args: {
+function waitForDownloadImport(args: {
   dataUrl: string
-  filename: string
+  downloadFilename: string
   targetFolderId?: string
   duplicatePolicy?: string
-  /** Use longer API timeout for large full-page strips. */
-  apiTimeoutMs?: number
-  /** Skip API when payload is too large (go straight to download+import). */
-  maxDirectImportBytes?: number
 }): Promise<{ assetId?: string; skipped?: boolean }> {
-  const maxDirect = args.maxDirectImportBytes ?? FULLPAGE_MAX_DIRECT_IMPORT_BYTES
-  const useDirectApi = estimateDataUrlBytes(args.dataUrl) <= maxDirect
-
-  if (useDirectApi) {
-    try {
-      return await importFromDataUrl(
-        {
-          dataUrl: args.dataUrl,
-          filename: args.filename,
-          targetFolderId: args.targetFolderId,
-          duplicatePolicy: args.duplicatePolicy,
-        },
-        { timeoutMs: args.apiTimeoutMs ?? 10_000 },
-      )
-    } catch {
-      // fallback to download+filePath path below
-    }
-  }
-
+  // Large data: URLs are truncated by chrome.downloads on Windows — prefer importFromDataUrl.
   return new Promise((resolve, reject) => {
     chrome.downloads.download(
       {
         url: args.dataUrl,
-        filename: `AssetVault_Temp/${args.filename}`,
-        saveAs: false
+        filename: args.downloadFilename,
+        saveAs: false,
       },
       (downloadId) => {
         if (chrome.runtime.lastError) {
@@ -514,7 +561,7 @@ async function importDataUrlViaDownload(args: {
         }
         const finish = (
           listener: (delta: chrome.downloads.DownloadDelta) => void,
-          fn: () => void
+          fn: () => void,
         ) => {
           if (settled) return
           settled = true
@@ -539,7 +586,7 @@ async function importDataUrlViaDownload(args: {
                     const res = await importAsset({
                       filePath,
                       targetFolderId: args.targetFolderId,
-                      duplicatePolicy: args.duplicatePolicy
+                      duplicatePolicy: args.duplicatePolicy,
                     })
                     await removeDownloadArtifacts(downloadId)
                     resolve(res)
@@ -560,8 +607,8 @@ async function importDataUrlViaDownload(args: {
                 new Error(
                   delta.error?.current
                     ? `Download failed: ${delta.error.current}`
-                    : 'Download interrupted'
-                )
+                    : 'Download interrupted',
+                ),
               )
             })
           }
@@ -575,9 +622,61 @@ async function importDataUrlViaDownload(args: {
         }, IMPORT_DOWNLOAD_TIMEOUT_MS)
 
         chrome.downloads.onChanged.addListener(onChanged)
-      }
+      },
     )
   })
+}
+
+async function importDataUrlViaDownload(args: {
+  dataUrl: string
+  filename: string
+  targetFolderId?: string
+  duplicatePolicy?: string
+  /** Use longer API timeout for large full-page strips. */
+  apiTimeoutMs?: number
+  /** Max data: URL string length for direct POST; 0 = always download+filePath. */
+  maxDirectImportJsonChars?: number
+}): Promise<{ assetId?: string; skipped?: boolean }> {
+  // Board Saver batch data: URIs only — screenshots use importScreenshotCanvas instead.
+  const maxJsonChars = args.maxDirectImportJsonChars ?? DATAURL_MAX_DIRECT_JSON_CHARS
+  const useDirectApi = dataUrlFitsDirectImport(args.dataUrl, maxJsonChars)
+
+  if (useDirectApi) {
+    try {
+      const direct = await importFromDataUrl(
+        {
+          dataUrl: args.dataUrl,
+          filename: args.filename,
+          targetFolderId: args.targetFolderId,
+          duplicatePolicy: args.duplicatePolicy,
+        },
+        { timeoutMs: args.apiTimeoutMs ?? 10_000 },
+      )
+      if (!direct.skipped || args.duplicatePolicy !== 'import_copy') {
+        return direct
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!/body too large|INVALID_REQUEST/i.test(msg)) {
+        // Non-size errors: still try download path below.
+      }
+    }
+  }
+
+  const maxAttempts = args.duplicatePolicy === 'import_copy' ? 2 : 1
+  let last: { assetId?: string; skipped?: boolean } = { skipped: true }
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    last = await waitForDownloadImport({
+      dataUrl: args.dataUrl,
+      downloadFilename: uniqueTempDownloadFilename(args.filename),
+      targetFolderId: args.targetFolderId,
+      duplicatePolicy: args.duplicatePolicy,
+    })
+    if (!last.skipped) return last
+  }
+
+  return last
 }
 
 async function dataUrlToImageBitmap(dataUrl: string): Promise<ImageBitmap> {
@@ -591,16 +690,20 @@ async function canvasToImportBlob(
   canvas: OffscreenCanvas,
   format: 'jpeg' | 'png',
   maxBytes: number,
+  options?: { bestEffort?: boolean },
 ): Promise<Blob> {
   let current: OffscreenCanvas = canvas
+  let lastBlob: Blob | null = null
 
   const tryExport = async (): Promise<Blob | null> => {
     if (format === 'png') {
       const blob = await current.convertToBlob({ type: 'image/png' })
+      lastBlob = blob
       return blob.size <= maxBytes ? blob : null
     }
-    for (const quality of [0.88, 0.75, 0.62, 0.5, 0.38]) {
+    for (const quality of [0.88, 0.75, 0.62, 0.5, 0.38, 0.28]) {
       const blob = await current.convertToBlob({ type: 'image/jpeg', quality })
+      lastBlob = blob
       if (blob.size <= maxBytes) return blob
     }
     return null
@@ -619,11 +722,121 @@ async function canvasToImportBlob(
     current = scaled
   }
 
+  if (options?.bestEffort && lastBlob) return lastBlob
+  if (options?.bestEffort) {
+    return current.convertToBlob({
+      type: format === 'png' ? 'image/png' : 'image/jpeg',
+      quality: format === 'png' ? undefined : 0.28,
+    } as { type: string; quality?: number })
+  }
+
   throw new Error(
     format === 'png'
-      ? '整页截图分片过大（PNG），请改用 JPEG 或缩短页面'
-      : '整页截图分片过大，无法导入（请尝试较短页面）',
+      ? '截图分片过大（PNG），请改用 JPEG 或缩小区域'
+      : '截图分片过大，无法导入（请缩小区域或降低画质）',
   )
+}
+
+function cropCanvasTop(canvas: OffscreenCanvas, heightPx: number): OffscreenCanvas {
+  return cropCanvasRect(canvas, 0, 0, canvas.width, heightPx)
+}
+
+function cropCanvasRect(
+  canvas: OffscreenCanvas,
+  sx: number,
+  sy: number,
+  widthPx: number,
+  heightPx: number,
+): OffscreenCanvas {
+  const w = Math.max(1, Math.min(Math.round(widthPx), canvas.width - sx))
+  const h = Math.max(1, Math.min(Math.round(heightPx), canvas.height - sy))
+  if (w === canvas.width && h === canvas.height && sx === 0 && sy === 0) return canvas
+  const cropped = new OffscreenCanvas(w, h)
+  const ctx = cropped.getContext('2d')
+  if (!ctx) throw new Error('No 2d context')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
+  ctx.drawImage(canvas, sx, sy, w, h, 0, 0, w, h)
+  return cropped
+}
+
+/**
+ * One library asset per canvas (region / element crop).
+ * 1) Compress to fit POST /asset/importFromDataUrl
+ * 2) Else blob: URL download → /asset/import (one file, not 145px slices)
+ */
+async function importScreenshotCanvas(args: {
+  canvas: OffscreenCanvas
+  format: 'jpeg' | 'png'
+  filenameBase: string
+  targetFolderId?: string
+  duplicatePolicy?: 'use_existing' | 'import_copy'
+  apiTimeoutMs?: number
+}): Promise<{ assetIds: string[]; chunkErrors: number }> {
+  const ext = args.format === 'png' ? '.png' : '.jpg'
+  const filename = `${args.filenameBase}${ext}`
+  const policy = args.duplicatePolicy ?? 'import_copy'
+  const timeoutMs = args.apiTimeoutMs ?? FULLPAGE_IMPORT_API_TIMEOUT_MS
+
+  const tryDirectImport = async (bestEffort: boolean): Promise<string | null> => {
+    try {
+      const blob = await canvasToImportBlob(
+        args.canvas,
+        args.format,
+        FULLPAGE_IMPORT_CHUNK_MAX_BYTES,
+        { bestEffort },
+      )
+      const dataUrl = await blobToDataUrl(blob)
+      if (!dataUrlFitsDirectImport(dataUrl)) return null
+      const result = await importFromDataUrl(
+        {
+          dataUrl,
+          filename,
+          targetFolderId: args.targetFolderId,
+          duplicatePolicy: policy,
+        },
+        { timeoutMs },
+      )
+      if (result.skipped || !result.assetId) return null
+      return result.assetId
+    } catch {
+      return null
+    }
+  }
+
+  let assetId = await tryDirectImport(false)
+  if (!assetId) assetId = await tryDirectImport(true)
+
+  if (assetId) return { assetIds: [assetId], chunkErrors: 0 }
+
+  try {
+    const blob = await canvasToImportBlob(
+      args.canvas,
+      args.format,
+      8 * 1024 * 1024,
+      { bestEffort: true },
+    )
+    const { filePath, downloadId } = await downloadBlobToRelativeFilename(
+      blob,
+      uniqueTempDownloadFilename(filename)
+    )
+    try {
+      const res = await importAsset({
+        filePath,
+        targetFolderId: args.targetFolderId,
+        duplicatePolicy: policy,
+      })
+      if (!res.skipped && res.assetId) {
+        return { assetIds: [res.assetId], chunkErrors: 0 }
+      }
+    } finally {
+      await removeDownloadArtifacts(downloadId)
+    }
+  } catch (e) {
+    console.warn('[AssetVault] screenshot blob download import failed', e)
+  }
+
+  return { assetIds: [], chunkErrors: 1 }
 }
 
 async function cropAndImportRect(args: {
@@ -641,7 +854,7 @@ async function cropAndImportRect(args: {
   const captureOptions =
     format === 'png'
       ? ({ format: 'png' } as chrome.tabs.CaptureVisibleTabOptions)
-      : ({ format: 'jpeg', quality: 90 } as chrome.tabs.CaptureVisibleTabOptions)
+      : ({ format: 'jpeg', quality: 100 } as chrome.tabs.CaptureVisibleTabOptions)
 
   const dataUrl = await captureVisibleTabThrottled(tab.windowId, captureOptions)
   const bitmap = await dataUrlToImageBitmap(dataUrl)
@@ -661,24 +874,20 @@ async function cropAndImportRect(args: {
   if (!ctx) throw new Error('No 2d context')
   ctx.drawImage(bitmap, sx, sy, clampedSw, clampedSh, 0, 0, clampedSw, clampedSh)
 
-  const outBlob = await off.convertToBlob({
-    type: format === 'png' ? 'image/png' : 'image/jpeg',
-    quality: format === 'png' ? undefined : 0.9
-  } as any)
-  const croppedDataUrl = await blobToDataUrl(outBlob)
-
-  const ext = format === 'png' ? '.png' : '.jpg'
-  const filename = `screenshot-${args.message.mode}-${Date.now()}${ext}`
-
-  const importResult = await importDataUrlViaDownload({
-    dataUrl: croppedDataUrl,
-    filename,
+  const exportFormat = format === 'png' ? 'png' : 'jpeg'
+  const { assetIds, chunkErrors } = await importScreenshotCanvas({
+    canvas: off,
+    format: exportFormat,
+    filenameBase: `screenshot-${args.message.mode}-${Date.now()}`,
     targetFolderId: args.prefs.defaultFolderId || undefined,
-    // Screenshot should always create a new asset even if temp source path repeats.
-    duplicatePolicy: 'import_copy'
+    duplicatePolicy: 'import_copy',
   })
 
-  const msg = importResult.skipped ? '已存在（跳过）' : '截图已保存'
+  if (!assetIds.length) {
+    throw new Error(chunkErrors ? '截图保存失败' : '截图未入库')
+  }
+
+  const msg = assetIds.length > 1 ? `截图已保存（${assetIds.length} 张）` : '截图已保存'
   await notify(args.tabId, msg)
   await clearActionBadge()
 }
@@ -690,336 +899,110 @@ async function stitchAndImportFullPage(args: {
 }): Promise<void> {
   if (!args.tab.id || !args.tab.windowId) throw new Error('Missing tabId/windowId')
   const tabId = args.tab.id
-  activeFullpageCapture = { tabId, abort: false }
+  setFullpageCaptureActive(tabId)
+  resetFullPageSessionSupportCache()
 
-  const isAborted = () => activeFullpageCapture?.abort === true
+  let setup: Awaited<ReturnType<typeof setupFullpageInTab>>
+  try {
+    setup = await setupFullpageInTab(tabId)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    throw new Error(`无法获取页面滚动高度信息：${msg}`)
+  }
 
-  const setup = await chrome.scripting
-    .executeScript({
-      target: { tabId },
-      func: () => {
-        const FLAG_SCROLL_EL = '__assetvault_fullpage_scroll_el__'
-        const FLAG_RESTORE = '__assetvault_fullpage_restore__'
-
-        const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n))
-
-        // 策略：选择"最主要的滚动容器"而不是一律 scrollTo(window)。
-        const getMainScrollElement = (): HTMLElement => {
-          const candidates: HTMLElement[] = []
-          const nodes = Array.from(document.querySelectorAll<HTMLElement>('*'))
-          for (const el of nodes) {
-            if (!el) continue
-            const style = getComputedStyle(el)
-            const overflowY = style.overflowY
-            if (!(overflowY?.includes('auto') || overflowY?.includes('scroll'))) continue
-            if (style.visibility === 'hidden' || style.display === 'none') continue
-            if (el.scrollHeight > el.clientHeight + 1) candidates.push(el)
-          }
-          // documentElement / body 也算候选，保证至少有一个。
-          if (document.documentElement.scrollHeight > document.documentElement.clientHeight + 1) {
-            candidates.push(document.documentElement)
-          }
-          if (document.body?.scrollHeight > document.body.clientHeight + 1) candidates.push(document.body)
-          if (!candidates.length) return document.documentElement
-
-          // 优先选 scrollHeight 更大、clientHeight 更接近用户视口的容器。
-          const vw = window.innerWidth
-          const vh = window.innerHeight
-          candidates.sort((a, b) => {
-            const aScore = (a.scrollHeight - a.clientHeight) * 2 + Math.min(a.clientHeight, vh) / vh + Math.min(a.clientWidth, vw) / vw
-            const bScore = (b.scrollHeight - b.clientHeight) * 2 + Math.min(b.clientHeight, vh) / vh + Math.min(b.clientWidth, vw) / vw
-            return bScore - aScore
-          })
-          return candidates[0]
-        }
-
-        const scrollEl = getMainScrollElement()
-        ;(window as any)[FLAG_SCROLL_EL] = scrollEl
-
-        const viewportHeightCss = scrollEl === document.documentElement || scrollEl === document.body ? window.innerHeight : scrollEl.clientHeight
-        const scrollHeightCss = Math.max(0, scrollEl.scrollHeight)
-
-        const restoreState: any = { fixed: [] as any[], videos: [] as any[], scrollTop: 0 }
-        // 保存当前滚动位置，结束后恢复。
-        restoreState.scrollTop =
-          scrollEl === document.documentElement || scrollEl === document.body ? window.scrollY : (scrollEl as any).scrollTop || 0
-
-        // 隐藏 fixed/sticky 浮层，减少拼接时重复绘制/遮挡。
-        const shouldHideFloating = (el: HTMLElement): boolean => {
-          const style = getComputedStyle(el)
-          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false
-          const pos = style.position
-          if (pos !== 'fixed' && pos !== 'sticky') return false
-          // 仅隐藏当前可见区域里大概率会影响截图的元素。
-          const r = el.getBoundingClientRect()
-          const inView = r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth
-          if (!inView) return false
-          // 排除过小元素，避免影响布局缓存/性能。
-          if (r.width * r.height < 4000) return false
-          return true
-        }
-
-        const fixedCandidates = Array.from(document.querySelectorAll<HTMLElement>('*')).filter((el) => shouldHideFloating(el))
-        for (const el of fixedCandidates) {
-          restoreState.fixed.push({
-            el,
-            visibility: el.style.visibility,
-            pointerEvents: el.style.pointerEvents,
-            opacity: el.style.opacity
-          })
-          el.setAttribute('data-assetvault-fullpage-hidden', '1')
-          el.style.visibility = 'hidden'
-          el.style.pointerEvents = 'none'
-          // opacity 也降一下，减少合成闪烁
-          el.style.opacity = '0'
-        }
-
-        // 暂停播放中的视频，避免滚动时帧变化导致拼接出现"跳帧"。
-        const videos = Array.from(document.querySelectorAll<HTMLVideoElement>('video'))
-        for (const v of videos) {
-          if (v.paused) continue
-          restoreState.videos.push({ v, shouldResume: true })
-          try {
-            v.pause()
-          } catch {
-            // ignore
-          }
-        }
-
-        ;(window as any)[FLAG_RESTORE] = restoreState
-
-        const FLAG_ABORT_KEY = '__assetvault_fullpage_abort_key__'
-        const onAbortKey = (e: KeyboardEvent) => {
-          if (e.key === 'Escape') void chrome.runtime.sendMessage({ type: 'SCREENSHOT_ABORT' })
-        }
-        document.addEventListener('keydown', onAbortKey)
-        ;(window as any)[FLAG_ABORT_KEY] = onAbortKey
-
-        return {
-          scrollHeightCss,
-          viewportHeightCss: clamp(viewportHeightCss, 1, 10_000_000),
-          innerWidthCss: window.innerWidth,
-          dpr: window.devicePixelRatio || 1
-        }
-      }
-    })
-    .then((xs) => xs[0]?.result as any)
-    .catch(() => null)
-
-  if (!setup) throw new Error('无法获取页面滚动高度信息')
-
-  const scrollHeightCss = Math.max(1, Math.round(setup.scrollHeightCss))
   const viewportCss = Math.max(1, Math.round(setup.viewportHeightCss))
   const innerWidthCss = Math.max(1, Math.round(setup.innerWidthCss))
+  let scrollPlan = planFullpageCapturePositions({
+    scrollHeightCss: Math.max(1, Math.round(setup.scrollHeightCss)),
+    viewportCss,
+    maxSegments: 0,
+  })
 
   const captureOptions =
     args.format === 'png'
       ? ({ format: 'png' } as chrome.tabs.CaptureVisibleTabOptions)
-      : ({ format: 'jpeg', quality: 90 } as chrome.tabs.CaptureVisibleTabOptions)
+      : ({ format: 'jpeg', quality: 92 } as chrome.tabs.CaptureVisibleTabOptions)
 
-  const scrollPlan = planFullpageCapturePositions({
-    scrollHeightCss,
+  const buffer = new FullpageOutputBuffer({
+    scrollHeightCss: Math.max(1, Math.round(setup.scrollHeightCss)),
+    innerWidthCss,
     viewportCss,
-    maxSegments: FULLPAGE_MAX_SCROLL_SEGMENTS,
+    scrollPlan,
   })
-  const capturePositions = scrollPlan.positions
-  const overlapCss = scrollPlan.overlapCss
-  const effectiveScrollHeightCss = scrollPlan.effectiveScrollHeightCss
 
   if (scrollPlan.truncated) {
     await notify(
       tabId,
-      `页面过长，整页截图仅覆盖前 ${Math.round(effectiveScrollHeightCss / viewportCss)} 屏高度`,
+      `页面过长，整页截图仅覆盖前 ${Math.round(buffer.effectiveScrollHeightCss / viewportCss)} 屏高度`,
     )
     await sleep(1200)
   }
 
+  const capturePositions = [...scrollPlan.positions]
   await notify(tabId, `整页截图中 0/${capturePositions.length}…`)
 
-  const scrollToCss = async (yCss: number): Promise<void> => {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      func: (yy: number) => {
-        const scrollEl = (window as any)['__assetvault_fullpage_scroll_el__'] as HTMLElement | undefined
-        if (scrollEl && scrollEl !== document.documentElement && scrollEl !== document.body) {
-          ;(scrollEl as any).scrollTo(0, yy)
-        } else {
-          window.scrollTo(0, yy)
-        }
-      },
-      args: [yCss]
-    }).catch(() => null)
-
-    // 给布局/懒加载一点时间
-    await sleep(FULLPAGE_AFTER_SCROLL_MS)
-  }
-
-  const overlapPxFromScale = (scale: number) => Math.max(0, Math.round(overlapCss * scale))
-
-  // Lazy init: 第一次 captureVisibleTab 返回后，依据其实际像素宽度推导缩放比例。
-  let widthPx = 0
-  let totalHeightPx = 0
-  let overlapPx = 0
-  let captureScale = 1
-
-  let outputCanvases: OffscreenCanvas[] = []
-  let outputCtxs: OffscreenCanvasRenderingContext2D[] = []
-  let outputStripHeightPx = 0
-  let outputCount = 0
-
-  const ensureOutputs = (firstBitmap: ImageBitmap) => {
-    if (widthPx) return
-    widthPx = firstBitmap.width
-    captureScale = widthPx / innerWidthCss
-    totalHeightPx = Math.max(1, Math.round(effectiveScrollHeightCss * captureScale))
-    overlapPx = overlapPxFromScale(captureScale)
-
-    if (widthPx > FULLPAGE_CANVAS_MAX_SIDE) {
-      throw new Error('整页截图宽度过大，已拒绝生成（Canvas 限制）')
-    }
-
-    outputStripHeightPx = Math.min(
-      FULLPAGE_CANVAS_MAX_SIDE,
-      Math.max(1, Math.floor(FULLPAGE_CANVAS_MAX_PIXELS / Math.max(1, widthPx)))
-    )
-    if (outputStripHeightPx <= 0) throw new Error('整页截图画布上限不足，已拒绝生成')
-
-    outputCount = Math.ceil(totalHeightPx / outputStripHeightPx)
-    outputCanvases = []
-    outputCtxs = []
-    for (let i = 0; i < outputCount; i++) {
-      const h = Math.min(outputStripHeightPx, totalHeightPx - i * outputStripHeightPx)
-      const c = new OffscreenCanvas(widthPx, Math.max(1, h))
-      const ctx = c.getContext('2d')
-      if (!ctx) throw new Error('No 2d context')
-      outputCanvases.push(c)
-      outputCtxs.push(ctx)
-    }
-  }
-
-  const drawToOutputs = (bitmap: ImageBitmap, srcCropTopPx: number, destStartPx: number, drawHeightPx: number) => {
-    const destEndPx = destStartPx + drawHeightPx
-    for (let k = 0; k < outputCount; k++) {
-      const yStart = k * outputStripHeightPx
-      const yEnd = Math.min(totalHeightPx, (k + 1) * outputStripHeightPx)
-      const interStart = Math.max(destStartPx, yStart)
-      const interEnd = Math.min(destEndPx, yEnd)
-      const interH = interEnd - interStart
-      if (interH <= 0) continue
-
-      const srcY = srcCropTopPx + (interStart - destStartPx)
-      const destY = interStart - yStart
-      outputCtxs[k].drawImage(bitmap, 0, srcY, widthPx, interH, 0, destY, widthPx, interH)
-    }
-  }
-
-  const originalUrl = args.tab.url
   let restored = false
   const restore = async () => {
     if (restored) return
     restored = true
-    
-    try {
-      const currentTab = await chrome.tabs.get(tabId)
-      if (currentTab.url !== originalUrl) return
-    } catch {
-      return
-    }
-
-    await chrome.scripting
-      .executeScript({
-        target: { tabId },
-        func: () => {
-          const FLAG_RESTORE = '__assetvault_fullpage_restore__'
-          const FLAG_SCROLL_EL = '__assetvault_fullpage_scroll_el__'
-          const FLAG_ABORT_KEY = '__assetvault_fullpage_abort_key__'
-
-          const onAbortKey = (window as any)[FLAG_ABORT_KEY] as ((e: KeyboardEvent) => void) | undefined
-          if (onAbortKey) {
-            document.removeEventListener('keydown', onAbortKey)
-            delete (window as any)[FLAG_ABORT_KEY]
-          }
-
-          const restoreState = (window as any)[FLAG_RESTORE] as
-            | { fixed: Array<{ el: HTMLElement; visibility: string; pointerEvents: string; opacity: string }>; videos: Array<{ v: HTMLVideoElement; shouldResume: boolean }>; scrollTop: number }
-            | undefined
-          const scrollEl = (window as any)[FLAG_SCROLL_EL] as HTMLElement | undefined
-
-          if (restoreState) {
-            for (const f of restoreState.fixed) {
-              try {
-                f.el.style.visibility = f.visibility
-                f.el.style.pointerEvents = f.pointerEvents
-                f.el.style.opacity = f.opacity
-                f.el.removeAttribute('data-assetvault-fullpage-hidden')
-              } catch {
-                // ignore
-              }
-            }
-            for (const it of restoreState.videos) {
-              if (!it.shouldResume) continue
-              try {
-                it.v.play().catch(() => null)
-              } catch {
-                // ignore
-              }
-            }
-          }
-
-          // 恢复截图前的滚动位置。
-          const scrollTop = restoreState?.scrollTop ?? 0
-          if (scrollEl && scrollEl !== document.documentElement && scrollEl !== document.body) {
-            try {
-              ;(scrollEl as any).scrollTo(0, scrollTop)
-            } catch {
-              // ignore
-            }
-          } else {
-            try {
-              window.scrollTo(0, scrollTop)
-            } catch {
-              // ignore
-            }
-          }
-
-          delete (window as any)[FLAG_RESTORE]
-          delete (window as any)[FLAG_SCROLL_EL]
-        }
-      })
-      .catch(() => null)
+    await restoreFullpageInTab(tabId)
   }
+
+  let segmentsCompleted = 0
+  let captureStoppedEarly = false
+  let captureStopReason = ''
 
   try {
     for (let i = 0; i < capturePositions.length; i++) {
-      if (isAborted()) {
+      if (isFullpageCaptureAborted(tabId)) {
         await notify(tabId, '整页截图已取消')
         await clearActionBadge()
         return
       }
 
-      const yCss = capturePositions[i]
+      if (i > 0 && i % FULLPAGE_REMETRICS_EVERY_SEGMENTS === 0) {
+        const metrics = await readFullpageScrollMetricsInTab(tabId)
+        if (metrics) {
+          const added = buffer.extendScrollHeightIfTaller(metrics.scrollHeightCss)
+          capturePositions.push(...added)
+        }
+      }
+      if (i === capturePositions.length - 1) {
+        const metrics = await readFullpageScrollMetricsInTab(tabId)
+        if (metrics) {
+          const added = buffer.extendScrollHeightIfTaller(metrics.scrollHeightCss)
+          capturePositions.push(...added)
+        }
+      }
 
-      // 滚动到目标位置
-      await scrollToCss(yCss)
-
-      // 每段 capture 之后推导输出画布尺寸（基于真实像素宽度）。
-      const viewportDataUrl = await captureVisibleTabThrottled(args.tab.windowId, captureOptions)
-      const bitmap = await dataUrlToImageBitmap(viewportDataUrl)
+      const yCss = capturePositions[i]!
+      const isLastCapture = i === capturePositions.length - 1
 
       try {
-        ensureOutputs(bitmap)
-
-        const isFirst = i === 0
-        const srcCropTopPx = isFirst ? 0 : overlapPx
-        const drawableHeightPx = Math.max(0, bitmap.height - srcCropTopPx)
-        const destStartPx = Math.max(0, Math.round((yCss + (isFirst ? 0 : overlapCss)) * captureScale))
-        const drawHeightPx = Math.max(0, Math.min(drawableHeightPx, totalHeightPx - destStartPx))
-
-        if (drawHeightPx > 0) {
-          drawToOutputs(bitmap, srcCropTopPx, destStartPx, drawHeightPx)
+        if (isLastCapture) {
+          await applyFullpageLastFrameFloatingHides(tabId)
         }
-      } finally {
-        bitmap.close()
+
+        await scrollFullpageToCss(tabId, yCss)
+        const viewportDataUrl = await captureVisibleTabThrottled(args.tab.windowId, captureOptions)
+        const bitmap = await dataUrlToImageBitmap(viewportDataUrl)
+
+        try {
+          buffer.initFromFirstBitmap(bitmap)
+          buffer.drawSegment(bitmap, yCss, segmentsCompleted === 0)
+        } finally {
+          bitmap.close()
+        }
+
+        segmentsCompleted++
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : String(e)
+        if (reason.includes('滚动未到位')) throw e
+        if (segmentsCompleted === 0 || !buffer.initialized) throw e
+        if (!isAllowPartialCaptureStop(reason)) throw e
+        captureStoppedEarly = true
+        captureStopReason = reason
+        break
       }
 
       if (i % 2 === 0 || i === capturePositions.length - 1) {
@@ -1030,50 +1013,74 @@ async function stitchAndImportFullPage(args: {
 
     await restore()
 
-    if (isAborted()) {
+    if (isFullpageCaptureAborted(tabId)) {
       await notify(tabId, '整页截图已取消')
       await clearActionBadge()
       return
     }
 
-    const ext = args.format === 'png' ? '.png' : '.jpg'
-    const exportFormat = args.format === 'png' ? 'png' : 'jpeg'
-    const imported: Array<string | undefined> = []
-    for (let k = 0; k < outputCount; k++) {
-      if (isAborted()) {
-        await notify(tabId, '整页截图已取消')
-        await clearActionBadge()
-        return
-      }
-
-      const c = outputCanvases[k]
-      const outBlob = await canvasToImportBlob(
-        c,
-        exportFormat,
-        FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
-      )
-      const dataUrl = await blobToDataUrl(outBlob)
-
-      const importResult = await importDataUrlViaDownload({
-        dataUrl,
-        filename: `screenshot-fullpage-${Date.now()}-${k + 1}-of-${outputCount}${ext}`,
-        targetFolderId: args.prefs.defaultFolderId || undefined,
-        duplicatePolicy: 'import_copy',
-        apiTimeoutMs: FULLPAGE_IMPORT_API_TIMEOUT_MS,
-        maxDirectImportBytes: FULLPAGE_MAX_DIRECT_IMPORT_BYTES,
-      })
-
-      imported.push(importResult.assetId)
-      if (k % 2 === 0 || k === outputCount - 1) {
-        await notify(tabId, `整页截图分片保存中 ${k + 1}/${outputCount}…`)
-      }
+    if (!buffer.initialized || segmentsCompleted === 0 || buffer.maxContentBottomPx <= 0) {
+      throw new Error('未能截取任何画面')
     }
 
-    const msg = '整页截图已提交保存'
+    const exportHeightPx = Math.min(buffer.totalHeightPx, buffer.maxContentBottomPx)
+    const exportFormat = args.format === 'png' ? 'png' : 'jpeg'
+    const stamp = Date.now()
+
+    await notify(tabId, '整页截图合成并保存中…')
+
+    const { canvases: stripSources, heights: stripHeights } = buffer.exportStrips(exportHeightPx)
+    if (!stripSources.length) {
+      throw new Error('整页截图无有效分片')
+    }
+    const stitchedContentHeightPx = stripHeights.reduce((sum, h) => sum + h, 0)
+
+    const partialReasons: string[] = []
+    if (buffer.scrollPlan.truncated) partialReasons.push('页面高度超限，仅覆盖前段')
+    if (captureStoppedEarly) partialReasons.push(`采集未完成（${captureStopReason || '中途错误'}）`)
+
+    const allowPartial = buffer.scrollPlan.truncated || captureStoppedEarly
+    const captureScale = buffer.captureScale
+    const devicePixelRatio = Math.max(0.01, Math.round(captureScale * 100) / 100)
+
+    if (!(await supportsFullPageSessionApi())) {
+      throw new Error('AssetVault Pro 未提供整页截图 API，请更新并重启桌面端')
+    }
+
+    const finished = await importFullPageViaSession({
+      strips: stripSources,
+      stripHeightsPx: stripHeights,
+      widthPx: buffer.widthPx,
+      contentHeightPx: stitchedContentHeightPx,
+      overlapPx: 0,
+      devicePixelRatio,
+      format: exportFormat,
+      filenameBase: `screenshot-fullpage-${stamp}`,
+      inspectSessionId: fullPageInspectSessionId(stamp),
+      targetFolderId: args.prefs.defaultFolderId || undefined,
+      pageUrl: args.tab.url ?? '',
+      pageTitle: args.tab.title ?? '',
+      allowPartial,
+      shouldAbort: () => isFullpageCaptureAborted(tabId),
+    })
+
+    if (!finished.assetId && !finished.skipped) {
+      throw new Error('整页截图未入库')
+    }
+
+    partialReasons.push(...mapFullPageFinishWarnings(finished.warnings))
+    if (finished.tempDir && FULLPAGE_KEEP_STRIP_FILES_AFTER_FINISH) {
+      partialReasons.push(`条带目录: ${finished.tempDir}`)
+    }
+
+    const msg =
+      partialReasons.length > 0
+        ? `整页截图已保存（1 张长图）· ${partialReasons.join('；')}`
+        : '整页截图已保存'
     await notify(tabId, msg)
     await clearActionBadge()
   } finally {
-    activeFullpageCapture = null
+    clearFullpageCaptureActive(tabId)
     await restore().catch(() => null)
   }
 }

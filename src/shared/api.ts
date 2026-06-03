@@ -7,7 +7,7 @@ import type {
   JSendError
 } from './types'
 
-async function request<T>(
+export async function apiRequest<T>(
   path: string,
   init?: RequestInit & { query?: Record<string, string>; timeoutMs?: number }
 ): Promise<T> {
@@ -66,11 +66,11 @@ async function request<T>(
 }
 
 export async function pingApp(): Promise<{ name: string; version: string }> {
-  return request('/app/info')
+  return apiRequest('/app/info')
 }
 
 export async function getFolderTree(): Promise<FolderNode[]> {
-  const data = await request<FolderNode[] | { data: FolderNode[] }>('/folder/tree')
+  const data = await apiRequest<FolderNode[] | { data: FolderNode[] }>('/folder/tree')
   if (Array.isArray(data)) return data
   return data.data ?? []
 }
@@ -82,7 +82,7 @@ export async function importFromUrl(body: {
   duplicatePolicy?: string
   headers?: Record<string, string>
 }): Promise<ImportFromUrlResult> {
-  return request('/asset/importFromURL', {
+  return apiRequest('/asset/importFromURL', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -94,7 +94,7 @@ export async function importFromUrlBatch(body: {
   targetFolderId?: string
   duplicatePolicy?: string
 }): Promise<ImportFromUrlBatchResult> {
-  return request('/asset/importFromURLBatch', {
+  return apiRequest('/asset/importFromURLBatch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -102,7 +102,7 @@ export async function importFromUrlBatch(body: {
 }
 
 export async function assignTags(assetIds: string[], tagIds: string[]): Promise<void> {
-  await request('/tag/assign', {
+  await apiRequest('/tag/assign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ assetIds, tagIds })
@@ -114,7 +114,7 @@ export async function updateAsset(body: {
   sourceUrl?: string
   notes?: string
 }): Promise<void> {
-  await request('/asset/update', {
+  await apiRequest('/asset/update', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -126,7 +126,7 @@ export async function importAsset(body: {
   targetFolderId?: string
   duplicatePolicy?: string
 }): Promise<ImportFromUrlResult> {
-  return request('/asset/import', {
+  return apiRequest('/asset/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -142,7 +142,7 @@ export async function importFromDataUrl(
   },
   options?: { timeoutMs?: number },
 ): Promise<ImportFromUrlResult> {
-  return request('/asset/importFromDataUrl', {
+  return apiRequest('/asset/importFromDataUrl', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
