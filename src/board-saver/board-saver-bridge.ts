@@ -168,6 +168,7 @@ async function startScrollScan(): Promise<void> {
     const bottom = window.scrollY + window.innerHeight
     if (bottom >= newSh - 100) {
       scrollComplete = true
+      state = 'idle'
       setStatus(`✅ 已采集全部 ${items.length} 项`)
       return
     }
@@ -423,9 +424,6 @@ function enterEditMode(): void {
     fnEl.style.padding = '0 2px'
     fnEl.style.borderRadius = '2px'
     fnEl.title = '点击编辑文件名'
-    fnEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).blur() }
-    })
   }
 }
 
@@ -732,6 +730,7 @@ async function importSelected(): Promise<void> {
   const MAX_RETRIES = 2
   const skippedUrls: string[] = []
   const errorUrls: string[] = []
+  let totalImported = 0
   for (let i = 0; i < selected.length; i += BATCH) {
     const batch = selected.slice(i, i + BATCH)
     const count = Math.min(i + BATCH, selected.length)
@@ -750,8 +749,15 @@ async function importSelected(): Promise<void> {
           ok = true
           totalDone += batch.length
           // Collect skipped/error URLs from batch response
-          const batchResult = (resp as { batch?: { skipped?: Array<{url:string}>; errors?: Array<{url:string}>} }).batch
+          const batchResult = (resp as {
+            batch?: {
+              imported?: string[]
+              skipped?: Array<{ url: string }>
+              errors?: Array<{ url: string }>
+            }
+          }).batch
           if (batchResult) {
+            totalImported += batchResult.imported?.length ?? 0
             for (const s of batchResult.skipped || []) skippedUrls.push(s.url)
             for (const e of batchResult.errors || []) errorUrls.push(e.url)
           }
@@ -783,7 +789,7 @@ async function importSelected(): Promise<void> {
 
   const totalSkipped = skippedUrls.length
   const totalErrors = errorUrls.length
-  const imported = selected.length - totalSkipped - totalErrors
+  const imported = totalImported
   let summary = `完成！成功 ${imported}`
   if (totalSkipped) summary += `，跳过 ${totalSkipped}`
   if (totalErrors) summary += `，失败 ${totalErrors}`
@@ -796,7 +802,7 @@ async function importSelected(): Promise<void> {
   }
 
   // Save history record
-  saveHistoryRecord(selected.length)
+  saveHistoryRecord(imported)
 
   finishImport(summary)
 }
@@ -896,10 +902,8 @@ function buildPanel(): HTMLElement {
 function onQuickSaveClick(e: MouseEvent): void {
   if (!quickSaveMode) return
   const target = e.target as HTMLElement
-  // Ignore clicks inside our own panel
   if (target.closest(`#${ROOT_ID}`)) return
 
-  // Find the nearest clickable image
   let img = target as HTMLElement
   if (img.tagName !== 'IMG') {
     const closest = target.closest('img, video, [style*="background-image"]')
@@ -907,7 +911,6 @@ function onQuickSaveClick(e: MouseEvent): void {
     else return
   }
 
-  // Extract URL
   let url = ''
   if (img instanceof HTMLImageElement) {
     url = img.currentSrc || img.src
@@ -920,14 +923,29 @@ function onQuickSaveClick(e: MouseEvent): void {
   }
   if (!url || !/^https?:\/\//.test(url)) return
 
-  // Save immediately
   e.preventDefault()
   e.stopPropagation()
-  showToast('已保存')
-  void chrome.runtime.sendMessage({
-    type: 'IMPORT_META',
-    meta: { url, pageUrl: location.href, pageTitle: document.title },
-  }).catch(() => showToast('保存失败'))
+  void (async () => {
+    showToast('保存中…')
+    try {
+      let saveUrl = url
+      if (img instanceof HTMLImageElement) {
+        try {
+          saveUrl = await enlargeImageUrl(url)
+        } catch {
+          /* keep preview URL */
+        }
+      }
+      const resp = await chrome.runtime.sendMessage({
+        type: 'IMPORT_META',
+        meta: { url: saveUrl, pageUrl: location.href, pageTitle: document.title },
+      })
+      if (resp?.ok) showToast('已保存')
+      else showToast('保存失败')
+    } catch {
+      showToast('保存失败')
+    }
+  })()
 }
 
 function bindEvents(): void {
@@ -935,6 +953,16 @@ function bindEvents(): void {
   el('bs-import-selected').addEventListener('click', () => void importSelected())
   el('bs-select-all').addEventListener('click', () => { for (const it of items) it.selected = true; syncCardSelection(); updateStats() })
   el('bs-deselect-all').addEventListener('click', () => { for (const it of items) it.selected = false; syncCardSelection(); updateStats() })
+
+  el<HTMLElement>('bs-grid').addEventListener('keydown', (e) => {
+    if (!editMode) return
+    const t = e.target as HTMLElement
+    if (!t.classList.contains('bs-filename')) return
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      t.blur()
+    }
+  })
 
   let debounce: ReturnType<typeof setTimeout> | undefined
   el<HTMLInputElement>('bs-search').addEventListener('input', () => {
