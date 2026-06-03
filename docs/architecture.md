@@ -54,6 +54,14 @@ Service Worker (background.js)
 
 规格见 [fullpage-stitch-session-api-spec.md](./fullpage-stitch-session-api-spec.md)。相关模块：`fullpage-session-api.ts`、`fullpage-session-import.ts`、`fullpage-strip-upload.ts`。
 
+## 网页保存为 Markdown
+
+- 扩展已实现：采集主栏 → Turndown → 媒体本地化 → 编排会话长传
+- 会话接口 `articleBundleSession` 位于 `article-bundle-session-api.ts`
+- 等待 Pro 端实现对应的 `start/append/finish` 接口
+- 需求文档（扩展）：[page-markdown-export-extension-requirements.md](./page-markdown-export-extension-requirements.md)
+- 需求文档（Pro）：[page-markdown-export-pro-requirements.md](./page-markdown-export-pro-requirements.md)
+
 ## 相关文件
 
 - `src/board-saver/board-saver-bridge.ts` — UI 编排与状态（mount/scan/import 协调）

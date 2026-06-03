@@ -22,6 +22,13 @@
 
 整页高画质拼接的**完整方案 B 规格**（请求体、错误码、扩展集成流程）：[fullpage-stitch-session-api-spec.md](./fullpage-stitch-session-api-spec.md)
 
+Markdown 资料包（扩展已实现提取与编排流程，Pro 需实现对应 API 后才可入库）：
+
+| 文档 | 说明 |
+|------|------|
+| [page-markdown-export-pro-requirements.md](./page-markdown-export-pro-requirements.md) | Pro：`articleBundleSession` 等待开发需求 |
+| [page-markdown-export-extension-requirements.md](./page-markdown-export-extension-requirements.md) | 扩展：提取 / Turndown / 上传编排需求（已实现） |
+
 **注意**：条带通过 `chrome.downloads` 写入 `下载/AssetVault_Temp/fullpage/{sessionId}/`，须与 Pro 使用的系统「下载」目录一致（Chrome 若改到其他文件夹，append 会报路径不一致）。
 
 请求体、JSend 响应、`Referer`、重复策略等完整说明见 **AssetVault Pro** 仓库：

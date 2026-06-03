@@ -34,6 +34,8 @@ const FULLPAGE_INJECTED_WATCH_FILES = [
   'src/shared/fullpage-page-helpers.ts',
 ] as const
 
+const PAGE_MARKDOWN_INJECTED_WATCH_DIRS = ['src/page-markdown'] as const
+
 /** Static assets copied by scripts/postbuild.mjs (not Vite JS entries). */
 const POSTBUILD_WATCH_PATHS = [
   'src/manifest.json',
@@ -88,9 +90,32 @@ async function buildFullpageInjectedIife(): Promise<void> {
   console.log('[vite] dist/fullpage-injected.js (IIFE)')
 }
 
+async function buildPageMarkdownInjectedIife(): Promise<void> {
+  await viteBuild({
+    configFile: false,
+    base: '',
+    build: {
+      outDir: resolve(root, 'dist'),
+      emptyOutDir: false,
+      sourcemap: true,
+      rollupOptions: {
+        input: resolve(root, 'src/page-markdown/page-markdown-injected.ts'),
+        output: {
+          format: 'iife',
+          entryFileNames: 'page-markdown-injected.js',
+          inlineDynamicImports: true,
+          name: 'AssetVaultPageMarkdownInjected',
+        },
+      },
+    },
+  })
+  console.log('[vite] dist/page-markdown-injected.js (IIFE)')
+}
+
 async function buildPageInjectedIifeBundles(): Promise<void> {
   await buildContentIife()
   await buildFullpageInjectedIife()
+  await buildPageMarkdownInjectedIife()
 }
 
 async function runPostbuild(): Promise<void> {
@@ -126,6 +151,11 @@ function contentScriptIifePlugin(): Plugin {
       }
       for (const rel of FULLPAGE_INJECTED_WATCH_FILES) {
         this.addWatchFile(resolve(root, rel))
+      }
+      for (const rel of PAGE_MARKDOWN_INJECTED_WATCH_DIRS) {
+        for (const file of walkSourceFiles(resolve(root, rel))) {
+          this.addWatchFile(file)
+        }
       }
     },
     async closeBundle() {

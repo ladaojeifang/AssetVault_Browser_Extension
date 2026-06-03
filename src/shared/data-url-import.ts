@@ -14,6 +14,14 @@ export function dataUrlFitsDirectImport(
   return dataUrl.length <= maxJsonChars
 }
 
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read blob as data URL'))
+    reader.readAsDataURL(blob)
+  })
+}
 export function estimateDataUrlDecodedBytes(dataUrl: string): number {
   const comma = dataUrl.indexOf(',')
   if (comma < 0) return dataUrl.length

@@ -112,6 +112,19 @@ async function init(): Promise<void> {
     })
   })
 
+  // ── Page Markdown Export ───────────────────────────────────────────
+  el<HTMLButtonElement>('exportPageMd').addEventListener('click', () => {
+    void withActiveTabPermission(async (tab) => {
+      if (!tab.id) return
+      try {
+        await chrome.runtime.sendMessage({ type: 'EXPORT_PAGE_MARKDOWN' })
+        window.close()
+      } catch (e) {
+        alert(e instanceof Error ? e.message : String(e))
+      }
+    })
+  })
+
   // ── Video/GIF deep scan ────────────────────────────────────────────
   el<HTMLButtonElement>('batchVideoSave').addEventListener('click', () => {
     void withActiveTabPermission(async (tab) => {

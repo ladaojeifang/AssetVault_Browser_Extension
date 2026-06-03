@@ -22,14 +22,15 @@ export type BgMessage =
   | { type: 'FULLPAGE_CAPTURE_DONE'; tabId: number; ok: boolean; error?: string }
   | { type: 'RESOLVE_VIDEO_CANDIDATES' }
   | { type: 'RESCAN_PAGE_MEDIA'; tabId?: number; pageUrl?: string }
-  | {
-      type: 'IMPORT_MEDIA_CANDIDATE_BATCH'
+  | { type: 'IMPORT_MEDIA_CANDIDATE_BATCH'
       items: Array<{
         url: string
         filename?: string
         headers?: Record<string, string>
       }>
     }
+  | { type: 'EXPORT_PAGE_MARKDOWN', tabId?: number }
+  | { type: 'EXPORT_PAGE_MARKDOWN_ABORT', tabId?: number }
 
 export type BgResponse =
   | {

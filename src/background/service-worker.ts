@@ -50,6 +50,7 @@ import {
   scrollFullpageToCss,
   setupFullpageInTab,
 } from '../shared/fullpage-tab-bridge'
+import { orchestratePageMarkdownExport, abortPageMarkdown } from '../page-markdown/page-markdown-export'
 
 /** Default concurrency for batch download operations. */
 const BATCH_DOWNLOAD_CONCURRENCY = 2
@@ -164,6 +165,7 @@ async function executeBatchImportWithProgress(args: {
 }
 
 const MENU_ID = 'assetvault-save-image'
+const MENU_PAGE_MD_ID = 'assetvault-save-page-md'
 
 /** Per-tab full-page jobs; abort via SCREENSHOT_ABORT (matches tab when known). */
 const activeFullpageCaptures = new Map<number, { abort: boolean }>()
@@ -217,9 +219,9 @@ function isCaptureQuotaError(err: unknown): boolean {
   return msg.includes('MAX_CAPTURE_VISIBLE_TAB') || msg.includes('quota')
 }
 
-async function captureVisibleTabThrottled(
+export async function captureVisibleTabThrottled(
   windowId: number,
-  options: chrome.tabs.CaptureVisibleTabOptions
+  options: chrome.tabs.CaptureVisibleTabOptions = {}
 ): Promise<string> {
   for (let attempt = 0; attempt < 8; attempt++) {
     const now = Date.now()
@@ -251,11 +253,24 @@ chrome.runtime.onInstalled.addListener(() => {
       title: '保存到 AssetVault Pro',
       contexts: ['image', 'video', 'link']
     })
+    chrome.contextMenus.create({
+      id: MENU_PAGE_MD_ID,
+      title: '保存正文为 Markdown',
+      contexts: ['page', 'selection']
+    })
   })
 })
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== MENU_ID || !tab?.id) return
+  if (!tab?.id) return
+
+  if (info.menuItemId === MENU_PAGE_MD_ID) {
+    const prefs = await getPreferences()
+    void orchestratePageMarkdownExport(tab.id, prefs.defaultFolderId || undefined).catch(() => {})
+    return
+  }
+
+  if (info.menuItemId !== MENU_ID) return
 
   const pageUrl = info.pageUrl || tab.url
   if (!pageUrl) {
@@ -444,6 +459,18 @@ async function routeMessage(message: BgMessage, sender: chrome.runtime.MessageSe
       if (tab?.id) {
         await dismissShotUI(tab.id)
       }
+      return { ok: true }
+    }
+    case 'EXPORT_PAGE_MARKDOWN': {
+      const tab = sender.tab?.id ? sender.tab : await getActiveTabOrThrow().catch(() => null)
+      if (!tab?.id) return { ok: false, error: '无法定位当前标签页' }
+      const prefs = await getPreferences()
+      void orchestratePageMarkdownExport(tab.id, prefs.defaultFolderId || undefined).catch(() => {})
+      return { ok: true }
+    }
+    case 'EXPORT_PAGE_MARKDOWN_ABORT': {
+      const tabId = message.tabId ?? sender.tab?.id
+      if (tabId) abortPageMarkdown(tabId)
       return { ok: true }
     }
     default:
