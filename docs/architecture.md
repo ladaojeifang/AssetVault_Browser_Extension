@@ -56,7 +56,8 @@ Service Worker (background.js)
 
 ## 网页保存为 Markdown
 
-- 扩展已实现：采集主栏 → Turndown → 媒体本地化 → 编排会话长传
+- 扩展已实现：页面顶部视口缩略图 → 采集主栏 → Turndown → 媒体本地化 → 编排会话长传
+- 缩略图：滚至 `scrollY=0` 后单次 `captureVisibleTab`（非整页拼接），采集后恢复滚动；正文提取可在懒加载预滚动后进行
 - 会话接口 `articleBundleSession` 位于 `article-bundle-session-api.ts`
 - 等待 Pro 端实现对应的 `start/append/finish` 接口
 - 需求文档（扩展）：[page-markdown-export-extension-requirements.md](./page-markdown-export-extension-requirements.md)

@@ -13,9 +13,15 @@ export interface ArticleBundleSessionAppendResult {
   sessionBytes: number
 }
 
+export type ArticleBundleFinishWarning =
+  | string
+  | { code: string; relativePath?: string; message: string }
+
 export interface ArticleBundleSessionFinishResult {
   assetId?: string
-  warnings?: string[]
+  skipped?: boolean
+  storagePath?: string | null
+  warnings?: ArticleBundleFinishWarning[]
 }
 
 export interface ArticleBundleSessionAbortResult {

@@ -2,13 +2,19 @@ import {
   articleBundleSessionStart,
   articleBundleSessionAppend,
   articleBundleSessionFinish,
-  releaseArticleBundleSessionOnFailure
+  releaseArticleBundleSessionOnFailure,
 } from './article-bundle-session-api'
-import { blobToDataUrl } from './data-url-import'
+import {
+  ARTICLE_BUNDLE_THUMB_RELATIVE,
+  sanitizeMarkdownBundleFilename,
+} from './article-bundle-session-paths'
+import { blobToBase64DataUrl, dataUrlFitsDirectImport, dataUrlToBlob } from './data-url-import'
 
 export interface ArticleBundleFile {
   relativePath: string
-  blob: Blob
+  /** Prefer dataUrl when already available (e.g. captureVisibleTab). */
+  dataUrl?: string
+  blob?: Blob
 }
 
 export interface ArticleBundleSessionImportArgs {
@@ -16,9 +22,7 @@ export interface ArticleBundleSessionImportArgs {
   pageTitle: string
   markdownFilename: string
   targetFolderId?: string | null
-  
-  files: ArticleBundleFile[] // markdown, thumb, images, etc.
-  
+  files: ArticleBundleFile[]
   shouldAbort?: () => boolean
 }
 
@@ -29,28 +33,99 @@ export interface ArticleBundleSessionImportResult {
   tempDir?: string
 }
 
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50MB max per file upload for now
+/** Pro allows ~100MB per file in append body (base64 overhead included). */
+const MAX_SINGLE_FILE_BYTES = 95 * 1024 * 1024
+const MAX_DATA_URL_JSON_CHARS = 130 * 1024 * 1024
+
+/** Only one bundle import at a time — parallel starts abort each other's sessions on Pro. */
+let bundleImportChain: Promise<void> = Promise.resolve()
+
+function runExclusiveBundleImport<T>(fn: () => Promise<T>): Promise<T> {
+  const run = bundleImportChain.then(fn)
+  bundleImportChain = run.then(
+    () => undefined,
+    () => undefined
+  )
+  return run
+}
+
+function formatArticleBundleApiError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  if (/ARTICLE_BUNDLE_SESSION_NOT_FOUND|ARTICLE_BUNDLE_SESSION_EXPIRED/i.test(msg)) {
+    return 'Markdown 会话已失效（请勿重复点击导出；若刚重启 Pro 请重试）'
+  }
+  if (/ARTICLE_BUNDLE_SESSION_LIMIT/i.test(msg)) {
+    return '桌面端活跃 Markdown 会话过多，请稍后重试'
+  }
+  if (/LIBRARY_NOT_OPEN|LIBRARY_NOT_READY/i.test(msg)) {
+    return '资料库未打开，请先在 AssetVault Pro 中打开资料库'
+  }
+  if (/ARTICLE_BUNDLE_PATH_DENIED|ARTICLE_BUNDLE_FILE_NOT_FOUND/i.test(msg)) {
+    return `文件路径校验失败: ${msg}`
+  }
+  if (/ARTICLE_BUNDLE_INCOMPLETE/i.test(msg)) {
+    return '资料包不完整（缺少 Markdown 或缩略图）'
+  }
+  if (/INVALID_REQUEST/i.test(msg)) {
+    return '请求参数无效（请确认 Pro 与扩展均为最新版本）'
+  }
+  if (/body too large|请求体过大/i.test(msg)) {
+    return '单文件过大，请减少正文图片数量后重试'
+  }
+  return msg
+}
+
+async function fileToBase64DataUrl(file: ArticleBundleFile): Promise<string> {
+  if (file.dataUrl?.startsWith('data:')) {
+    if (!/^data:[^;]*;base64,/i.test(file.dataUrl)) {
+      return blobToBase64DataUrl(dataUrlToBlob(file.dataUrl))
+    }
+    if (file.dataUrl.length < 32) {
+      throw new Error(`文件 ${file.relativePath} 内容为空`)
+    }
+    return file.dataUrl
+  }
+  if (!file.blob) {
+    throw new Error(`文件 ${file.relativePath} 无数据`)
+  }
+  if (file.blob.size === 0) {
+    throw new Error(`文件 ${file.relativePath} 内容为空`)
+  }
+  if (file.blob.size > MAX_SINGLE_FILE_BYTES) {
+    throw new Error(
+      `文件 ${file.relativePath} 超过单文件上限（${Math.round(file.blob.size / 1024 / 1024)}MB）`,
+    )
+  }
+  return blobToBase64DataUrl(file.blob)
+}
 
 export async function importArticleBundleViaSession(
-  args: ArticleBundleSessionImportArgs
+  args: ArticleBundleSessionImportArgs,
+): Promise<ArticleBundleSessionImportResult> {
+  return runExclusiveBundleImport(() => importArticleBundleViaSessionInner(args))
+}
+
+async function importArticleBundleViaSessionInner(
+  args: ArticleBundleSessionImportArgs,
 ): Promise<ArticleBundleSessionImportResult> {
   let sessionId: string | null = null
+
+  const markdownFilename = sanitizeMarkdownBundleFilename(args.markdownFilename)
 
   try {
     const startBody = {
       output: {
-        markdownFilename: args.markdownFilename,
+        markdownFilename,
         targetFolderId: args.targetFolderId ?? null,
-        duplicatePolicy: 'import_copy' as const
+        duplicatePolicy: 'import_copy' as const,
       },
       sourceMeta: {
         pageUrl: args.pageUrl,
-        pageTitle: args.pageTitle
-      }
+        pageTitle: args.pageTitle,
+      },
     }
 
     let started: Awaited<ReturnType<typeof articleBundleSessionStart>>
-    
     try {
       started = await articleBundleSessionStart(startBody)
     } catch (e) {
@@ -61,6 +136,9 @@ export async function importArticleBundleViaSession(
     }
 
     sessionId = started.sessionId
+    if (!sessionId?.startsWith('ab_')) {
+      throw new Error('Markdown 会话创建失败（Pro 未返回有效 sessionId）')
+    }
 
     for (let i = 0; i < args.files.length; i++) {
       if (args.shouldAbort?.()) {
@@ -68,17 +146,19 @@ export async function importArticleBundleViaSession(
       }
 
       const file = args.files[i]!
-      
-      if (file.blob.size > MAX_FILE_SIZE_BYTES) {
-        throw new Error(`文件 ${file.relativePath} 超过上传上限（${Math.round(file.blob.size / 1024 / 1024)}MB）`)
+      const relativePath = file.relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
+
+      const fileDataUrl = await fileToBase64DataUrl(file)
+      if (!dataUrlFitsDirectImport(fileDataUrl, MAX_DATA_URL_JSON_CHARS)) {
+        throw new Error(
+          `文件 ${relativePath} 过大，无法上传（请减少图片或缩短页面）`,
+        )
       }
 
-      const fileDataUrl = await blobToDataUrl(file.blob)
-
       await articleBundleSessionAppend({
-        sessionId: started.sessionId,
-        relativePath: file.relativePath,
-        fileDataUrl
+        sessionId,
+        relativePath,
+        fileDataUrl,
       })
     }
 
@@ -87,26 +167,31 @@ export async function importArticleBundleViaSession(
     }
 
     const finished = await articleBundleSessionFinish({
-      sessionId: started.sessionId,
-      options: {
-        deleteSessionFilesAfter: true // Cleanup temp dir after import by default
-      }
+      sessionId,
+      requiredFiles: {
+        markdown: markdownFilename,
+        thumbnail: ARTICLE_BUNDLE_THUMB_RELATIVE,
+      },
     })
+
+    const warnings = (finished.warnings ?? []).map((w) =>
+      typeof w === 'string' ? w : w.message || w.code || String(w),
+    )
 
     return {
       assetId: finished.assetId,
-      warnings: finished.warnings || [],
-      tempDir: started.tempDir
+      warnings,
+      tempDir: started.tempDir,
     }
   } catch (err) {
     if (sessionId) {
       await releaseArticleBundleSessionOnFailure(sessionId)
     }
-    
+
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('取消') || msg.includes('aborted')) {
       return { warnings: [], skipped: true }
     }
-    throw err
+    throw new Error(formatArticleBundleApiError(err))
   }
 }

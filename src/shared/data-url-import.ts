@@ -15,12 +15,37 @@ export function dataUrlFitsDirectImport(
 }
 
 export function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(new Error('Failed to read blob as data URL'))
-    reader.readAsDataURL(blob)
-  })
+  return blobToBase64DataUrl(blob)
+}
+
+/** Pro articleBundle append only accepts `data:*;base64,...` payloads. */
+export async function blobToBase64DataUrl(blob: Blob): Promise<string> {
+  const buf = await blob.arrayBuffer()
+  if (buf.byteLength === 0) {
+    throw new Error('文件内容为空')
+  }
+  const bytes = new Uint8Array(buf)
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  const b64 = btoa(binary)
+  const mime = (blob.type || 'application/octet-stream').split(';')[0]!.trim() || 'application/octet-stream'
+  return `data:${mime};base64,${b64}`
+}
+
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const m = dataUrl.match(/^data:([^;,]*)(?:;charset=[^;,]*)?;base64,(.+)$/s)
+  if (!m) {
+    throw new Error('无效的 data URL')
+  }
+  const mime = m[1] || 'application/octet-stream'
+  const b64 = m[2]!.replace(/\s/g, '')
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mime })
 }
 export function estimateDataUrlDecodedBytes(dataUrl: string): number {
   const comma = dataUrl.indexOf(',')

@@ -15,7 +15,7 @@
 
 ### 1.2 用户故事
 
-作为资料库用户，我在浏览器中打开一篇文章/帖子后，希望一键将**主栏正文**保存为 Markdown 文件，并将正文中的图片、可下载视频保存到**同一资产目录**下，使 Markdown 内使用 `./assets/...` 相对路径即可离线阅读；资料库列表中用**当前视口截图**作为该条目的缩略图。
+作为资料库用户，我在浏览器中打开一篇文章/帖子后，希望一键将**主栏正文**保存为 Markdown 文件，并将正文中的图片、可下载视频保存到**同一资产目录**下，使 Markdown 内使用 `./assets/...` 相对路径即可离线阅读；资料库列表中用**页面最顶端一屏**截图作为该条目的缩略图（导出前滚至顶部单帧，非整页长图）。
 
 ### 1.3 业务目标
 
@@ -24,7 +24,7 @@
 | 主栏正文 | 提取当前页「主内容列」文字结构，输出 GFM Markdown |
 | 格式保留 | 段落、标题、列表、引用、表格、 fenced 代码块等 |
 | 媒体本地化 | 主栏内图片、可直链视频下载后写入相对路径 |
-| 视口缩略图 | **当前视图**单帧截图（非整页长图） |
+| 视口缩略图 | **页面顶部**单帧截图（滚至 `scrollY=0` 后 `captureVisibleTab`，非整页长图） |
 | 单条资产 | 通过 Pro API 入库为 **1 个** `assetId`（见 Pro 需求文档） |
 | 体验一致 | 默认文件夹、重复策略、Token、Toast、API 连通性与现有导入一致 |
 
@@ -120,8 +120,8 @@ Turndown + GFM、YAML front matter      —
 
 | ID | 需求 | 验收标准 |
 |----|------|----------|
-| FR-E-THUMB-01 | 采集方式 | 单次 `captureVisibleTab`（复用 `captureVisibleTabThrottled`） |
-| FR-E-THUMB-02 | 非整页 | **不得**默认走 `fullPageSession` 或分段滚动拼接 |
+| FR-E-THUMB-01 | 采集方式 | 导出前将标签页滚至顶部（`scrollY=0`），等待布局稳定后单次 `captureVisibleTab`（复用 `captureVisibleTabThrottled`），采集后恢复用户原滚动位置 |
+| FR-E-THUMB-02 | 非整页 | **不得**走 `fullPageSession` 或多段滚动拼接；仅顶端一屏 |
 | FR-E-THUMB-03 | 格式 | JPEG；质量/缩放控制体积（参考 `fullpage-capture` 条带体积思路，目标适配 Pro append 限制） |
 | FR-E-THUMB-04 | 文件名 | 上传 Pro 时使用约定名 `_thumb.jpg`（与 Pro 文档一致） |
 | FR-E-THUMB-05 | 正文 | 缩略图**不**写入 MD 正文（仅作库内预览） |
@@ -269,7 +269,7 @@ src/
 - [ ] CSDN / 知乎：fenced code 保留  
 - [ ] 无规则博客：Readability 提取成功  
 - [ ] MD 文件名为页标题（sanitize 后）  
-- [ ] 缩略图为**当前视口**，非整页长图  
+- [ ] 缩略图为**页面顶部一屏**（非用户当前滚动位置、非整页长图）  
 - [ ] 一次导出仅触发 **一条** Pro finish（不产生 N 次独立 URL 导入）  
 - [ ] 主栏提取失败时不产生空资产  
 - [ ] `pnpm run typecheck` 与 `pnpm run test` 通过  

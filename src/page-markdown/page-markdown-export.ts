@@ -2,17 +2,24 @@ import {
   importArticleBundleViaSession,
   type ArticleBundleFile
 } from '../shared/article-bundle-session-import'
-import { supportsArticleBundleSessionApi } from '../shared/article-bundle-session-api'
+import {
+  resetArticleBundleSessionSupportCache,
+  supportsArticleBundleSessionApi,
+} from '../shared/article-bundle-session-api'
 import { replaceMediaPaths, type MediaItem } from './extract/media-inventory'
-import { sanitizeFilename } from './convert/sanitize-filename'
+import { sanitizeMarkdownBundleFilename } from '../shared/article-bundle-session-paths'
 import { captureVisibleTabThrottled } from '../background/service-worker'
-import type { PageMdExtractResponse } from './messages'
+import {
+  extractPageMarkdownInTab,
+  fetchBlobInTab,
+  withTabScrolledToTop,
+} from './page-markdown-tab-bridge'
 
 async function notify(tabId: number, text: string) {
   try {
-    await chrome.tabs.sendMessage(tabId, { type: 'SHOW_TOAST', text })
-  } catch (e) {
-    // maybe no content script
+    await chrome.tabs.sendMessage(tabId, { type: 'TOAST', text })
+  } catch {
+    /* content script may be unavailable */
   }
 }
 
@@ -27,30 +34,17 @@ export function abortPageMarkdown(tabId: number): void {
   abortControllers.get(tabId)?.abort()
 }
 
-async function injectAndExtract(tabId: number): Promise<PageMdExtractResponse> {
-  // Inject the IIFE content script
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ['page-markdown-injected.js']
-  })
-
-  // Send the message to extract
-  const response = await chrome.tabs.sendMessage(tabId, { type: 'PAGE_MD_EXTRACT' })
-  if (response.error) {
-    throw new Error(response.error)
+async function downloadMedia(tabId: number, url: string, signal: AbortSignal): Promise<Blob> {
+  if (signal.aborted) throw new Error('aborted')
+  try {
+    return await fetchBlobInTab(tabId, url)
+  } catch {
+    const res = await fetch(url, { signal })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    if (blob.size === 0) throw new Error('empty body')
+    return blob
   }
-  return response as PageMdExtractResponse
-}
-
-async function downloadMedia(
-  url: string,
-  signal: AbortSignal
-): Promise<Blob> {
-  // Try fetching directly from SW. 
-  // In a robust implementation, we might delegate back to content script to fetch with correct referer.
-  const res = await fetch(url, { signal })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.blob()
 }
 
 export async function orchestratePageMarkdownExport(tabId: number, targetFolderId?: string | null) {
@@ -62,30 +56,40 @@ export async function orchestratePageMarkdownExport(tabId: number, targetFolderI
   abortControllers.set(tabId, ac)
 
   try {
+    resetArticleBundleSessionSupportCache()
     const supported = await supportsArticleBundleSessionApi()
     if (!supported) {
       throw new Error('AssetVault Pro 未提供资料包导出 API，请更新并重启桌面端')
     }
 
+    const tab = await chrome.tabs.get(tabId)
+
+    await notify(tabId, '正在采集页面顶部预览…')
+    const thumbDataUrl = await withTabScrolledToTop(tabId, async () => {
+      if (ac.signal.aborted) throw new Error('已取消')
+      const dataUrl = await captureVisibleTabThrottled(tab.windowId, {
+        format: 'jpeg',
+        quality: 88,
+      })
+      if (!dataUrl.startsWith('data:image/')) {
+        throw new Error('页面顶部缩略图采集失败')
+      }
+      return dataUrl
+    })
+
+    if (ac.signal.aborted) throw new Error('已取消')
+
     await notify(tabId, '正在提取网页正文…')
-    const extractRes = await injectAndExtract(tabId)
+    const extractRes = await extractPageMarkdownInTab(tabId)
 
     if (ac.signal.aborted) throw new Error('已取消')
 
-    // Take viewport thumbnail
-    const thumbDataUrl = await captureVisibleTabThrottled(chrome.windows.WINDOW_ID_CURRENT)
-    const thumbRes = await fetch(thumbDataUrl)
-    const thumbBlob = await thumbRes.blob()
-
-    if (ac.signal.aborted) throw new Error('已取消')
-
-    // Download Media
     const successfulOriginalUrls = new Set<string>()
     const files: ArticleBundleFile[] = []
 
     files.push({
       relativePath: '_thumb.jpg',
-      blob: thumbBlob
+      dataUrl: thumbDataUrl,
     })
 
     const totalMedia = extractRes.media.length
@@ -108,7 +112,7 @@ export async function orchestratePageMarkdownExport(tabId: number, targetFolderI
           // Skip if no placeholder relative path assigned
           if (!m.placeholderRelativePath) continue
 
-          const blob = await downloadMedia(m.highResUrl, ac.signal)
+          const blob = await downloadMedia(tabId, m.highResUrl, ac.signal)
           files.push({
             relativePath: m.placeholderRelativePath.replace('./', ''),
             blob
@@ -132,11 +136,14 @@ export async function orchestratePageMarkdownExport(tabId: number, targetFolderI
 
     // Replace paths in markdown
     const finalMd = replaceMediaPaths(extractRes.markdownDraft, extractRes.media, successfulOriginalUrls)
-    const safeTitle = sanitizeFilename(extractRes.title)
+    if (!finalMd.trim()) {
+      throw new Error('正文为空，无法保存 Markdown')
+    }
+    const markdownFilename = sanitizeMarkdownBundleFilename(`${extractRes.title}.md`)
 
     files.push({
-      relativePath: `${safeTitle}.md`,
-      blob: new Blob([finalMd], { type: 'text/markdown' })
+      relativePath: markdownFilename,
+      blob: new Blob([finalMd], { type: 'text/markdown;charset=utf-8' }),
     })
 
     // Optionally add meta.json
@@ -156,7 +163,7 @@ export async function orchestratePageMarkdownExport(tabId: number, targetFolderI
     const result = await importArticleBundleViaSession({
       pageUrl: extractRes.sourceUrl,
       pageTitle: extractRes.title,
-      markdownFilename: `${safeTitle}.md`,
+      markdownFilename,
       targetFolderId,
       files,
       shouldAbort: () => ac.signal.aborted

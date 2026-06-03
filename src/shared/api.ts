@@ -65,7 +65,11 @@ export async function apiRequest<T>(
   return jsend.data
 }
 
-export async function pingApp(): Promise<{ name: string; version: string }> {
+export async function pingApp(): Promise<{
+  name: string
+  version: string
+  features?: string[]
+}> {
   return apiRequest('/app/info')
 }
 

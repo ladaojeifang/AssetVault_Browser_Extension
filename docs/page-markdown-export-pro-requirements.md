@@ -15,7 +15,7 @@
 
 ### 1.2 用户故事
 
-作为 AssetVault Pro 用户，我希望浏览器扩展将「一篇网页」保存为**单个资料库条目**：条目对应磁盘上一个 `assetId` 目录，内含以**页标题命名**的 Markdown 文件、视口缩略图、以及 `assets/` 子目录中的图片/视频；在资源管理器或 Pro 内打开 Markdown 时，相对路径 `./assets/...` 有效。
+作为 AssetVault Pro 用户，我希望浏览器扩展将「一篇网页」保存为**单个资料库条目**：条目对应磁盘上一个 `assetId` 目录，内含以**页标题命名**的 Markdown 文件、页面顶部视口缩略图、以及 `assets/` 子目录中的图片/视频；在资源管理器或 Pro 内打开 Markdown 时，相对路径 `./assets/...` 有效。
 
 ### 1.3 业务目标
 
@@ -37,7 +37,7 @@
 
 ### 1.5 与扩展的分工
 
-扩展负责：主栏提取、MD 草稿、媒体下载到临时路径、视口截图。  
+扩展负责：主栏提取、MD 草稿、媒体下载到临时路径、页面顶部单帧截图。  
 Pro 负责：会话目录校验、原子写入 `{assetId}/`、DB 注册、缩略图绑定、清理、错误码。
 
 详见 [page-markdown-export-extension-requirements.md §2](./page-markdown-export-extension-requirements.md)。
@@ -53,7 +53,7 @@ Pro 负责：会话目录校验、原子写入 `{assetId}/`、DB 注册、缩略
 ```text
 {libraryStorage}/{assetId}/
 ├── {sanitizedTitle}.md      # 主文档；文件名由扩展传入，= 页标题 sanitize
-├── _thumb.jpg                 # 视口缩略图（库 UI 预览）
+├── _thumb.jpg                 # 页面顶部一屏缩略图（库 UI 预览）
 ├── assets/
 │   ├── img-001.jpg
 │   ├── img-002.webp

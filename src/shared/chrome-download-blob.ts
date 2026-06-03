@@ -186,6 +186,8 @@ async function downloadViaBlobUrl(
     assertSavedUnderRelativeDir(result.filePath, rel)
     return result
   } finally {
+    // Let Chrome finish reading the blob URL before revoke (avoids 0-byte files).
+    await new Promise((r) => setTimeout(r, 400))
     await handle.revoke()
   }
 }
