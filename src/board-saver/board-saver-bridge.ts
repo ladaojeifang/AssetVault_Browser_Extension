@@ -5,6 +5,7 @@
  */
 
 import { collectBoardSaverItems } from './board-saver-scan-collect'
+import { collectBoardSaverVideoPages } from './board-saver-video-discover'
 import { type BoardSaverItem, SCAN_INTERVAL_MS, MAX_ITEMS } from './board-saver-types'
 import {
   type PageType,
@@ -23,7 +24,7 @@ import {
   readBoardSaverHistory,
   renderBoardSaverHistoryPanel,
 } from './board-saver-history'
-import { runBoardSaverBatchImport } from './board-saver-import-flow'
+import { runBoardSaverBatchImport, runBoardSaverVideoPageImport } from './board-saver-import-flow'
 import {
   BOARD_SAVER_ROOT_ID,
   createBoardSaverCard,
@@ -222,7 +223,7 @@ function stopPageDetection(): void {
 }
 
 async function scanPage(): Promise<BoardSaverItem[]> {
-  const result = await collectBoardSaverItems({
+  const imageResult = await collectBoardSaverItems({
     pageUrl,
     pageTitle,
     seenUrls,
@@ -230,8 +231,17 @@ async function scanPage(): Promise<BoardSaverItem[]> {
     maxItems: MAX_ITEMS,
     nextId: genId,
   })
-  totalItems = result.totalItems
-  return result.newItems
+  totalItems = imageResult.totalItems
+  const videoResult = collectBoardSaverVideoPages({
+    pageUrl,
+    pageTitle,
+    seenUrls,
+    totalItems,
+    maxItems: MAX_ITEMS,
+    nextId: genId,
+  })
+  totalItems = videoResult.totalItems
+  return [...imageResult.newItems, ...videoResult.newItems]
 }
 
 async function doScan(): Promise<void> {
@@ -350,13 +360,18 @@ function resumeScanAfterImport(hadPeriodicTimer: boolean): void {
 }
 
 async function importSelected(): Promise<void> {
-  const selected = items.filter(i => i.selected)
-  if (!selected.length) { showToast('请至少选择一项'); return }
+  const selected = items.filter((i) => i.selected)
+  if (!selected.length) {
+    showToast('请至少选择一项')
+    return
+  }
+  const imageItems = selected.filter((i) => i.kind !== 'video_page')
+  const videoItems = selected.filter((i) => i.kind === 'video_page')
   const hadPeriodicTimer = scanTimer !== null
   stopPeriodic()
   state = 'importing'
   setButtonsDisabled(true)
-  setStatus(`正在导入 ${selected.length} 项…`)
+
   const finishImport = (statusText: string, isError = false): void => {
     setStatus(statusText)
     if (isError) showToast(statusText)
@@ -364,36 +379,65 @@ async function importSelected(): Promise<void> {
     setButtonsDisabled(false)
   }
 
-  const result = await runBoardSaverBatchImport(
-    selected.map((item) => ({
-      url: item.url,
-      filename: item.filename,
-      referer: item.domain ? pageUrl : undefined,
-    })),
-    pageUrl,
-    {
-      onProgress: (count, total) => setStatus(`正在导入 ${count}/${total} 项…`),
-      onRetry: (retry, maxRetries) => setStatus(`请求超时，重试 ${retry}/${maxRetries}…`),
-    },
-  )
+  const summaries: string[] = []
+  let historyCount = 0
 
-  if (!result.ok && !hasImportedAssets(result.aggregate)) {
-    finishImport(`导入出错: ${result.error}`, true)
-    return
+  if (videoItems.length > 0) {
+    setStatus(`正在提交 ${videoItems.length} 个视频作品…`)
+    const videoResult = await runBoardSaverVideoPageImport(
+      videoItems.map((item) => ({
+        url: item.url,
+        platform: item.platform,
+        pageTitle,
+      })),
+    )
+    if (!videoResult.ok) {
+      finishImport(`视频导入失败: ${videoResult.error}`, true)
+      return
+    }
+    const videoSummary = `视频作品：成功 ${videoResult.succeeded}，失败 ${videoResult.failed}`
+    summaries.push(videoSummary)
+    historyCount += videoResult.succeeded
   }
 
-  let summary = formatImportSummary(result.aggregate)
-  if (!result.ok) {
-    summary += `（后续批次失败: ${result.error}）`
+  if (imageItems.length > 0) {
+    setStatus(`正在导入 ${imageItems.length} 张图片…`)
+    const result = await runBoardSaverBatchImport(
+      imageItems.map((item) => ({
+        url: item.url,
+        filename: item.filename,
+        referer: item.domain ? pageUrl : undefined,
+      })),
+      pageUrl,
+      {
+        onProgress: (count, total) => setStatus(`正在导入图片 ${count}/${total}…`),
+        onRetry: (retry, maxRetries) => setStatus(`请求超时，重试 ${retry}/${maxRetries}…`),
+      },
+    )
+
+    if (!result.ok && !hasImportedAssets(result.aggregate)) {
+      finishImport(`图片导入出错: ${result.error}`, true)
+      return
+    }
+
+    let imageSummary = formatImportSummary(result.aggregate)
+    if (!result.ok) {
+      imageSummary += `（后续批次失败: ${result.error}）`
+    }
+    summaries.push(imageSummary)
+    historyCount += result.aggregate.imported
+
+    if (result.aggregate.skippedUrls.length > 0 || result.aggregate.errorUrls.length > 0) {
+      showSkippedList(result.aggregate.skippedUrls, result.aggregate.errorUrls)
+    }
   }
+
+  const summary = summaries.join(' · ') || '导入完成'
   setStatus(summary)
   showToast(summary)
-
-  if (result.aggregate.skippedUrls.length > 0 || result.aggregate.errorUrls.length > 0) {
-    showSkippedList(result.aggregate.skippedUrls, result.aggregate.errorUrls)
+  if (historyCount > 0) {
+    await appendBoardSaverHistory({ pageUrl, pageTitle, count: historyCount, time: Date.now() })
   }
-
-  await appendBoardSaverHistory({ pageUrl, pageTitle, count: result.aggregate.imported, time: Date.now() })
   finishImport(summary)
 }
 

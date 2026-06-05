@@ -29,4 +29,6 @@
 
 - 默认 API：`http://127.0.0.1:41596/api/v1`
 - 修改与主应用 API 契约相关的请求/响应时，同步更新桌面端 `doc/web-api-v1-guide.md` 与 OpenAPI（在 AssetVault Pro 仓库）
+- 扩展侧：`pnpm run contract:sync` → 改调用代码 → 更新 `contracts/extension-api-surface.json` → `pnpm run contract:check`（见 [docs/cross-repo-workflow.md](docs/cross-repo-workflow.md)）
+- 推荐用父目录 [AssetVault.code-workspace](../AssetVault.code-workspace) 多根打开 Pro + 扩展
 - 不提交 Token、用户 `dist/` 调试产物以外的密钥

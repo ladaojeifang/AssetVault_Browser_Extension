@@ -1,0 +1,71 @@
+{
+  "$schema": "./extension-api-surface.schema.json",
+  "description": "扩展实际调用的 Web API 路径与方法。变更 src/shared/*-api.ts 或 api.ts 时同步更新，并运行 pnpm run contract:check。",
+  "endpoints": [
+    { "path": "/app/info", "method": "GET", "source": "src/shared/api.ts" },
+    { "path": "/folder/tree", "method": "GET", "source": "src/shared/api.ts" },
+    { "path": "/asset/importFromURL", "method": "POST", "source": "src/shared/api.ts" },
+    { "path": "/asset/importFromURLBatch", "method": "POST", "source": "src/shared/api.ts" },
+    { "path": "/asset/import", "method": "POST", "source": "src/shared/api.ts" },
+    { "path": "/asset/fetchRemoteBody", "method": "POST", "source": "src/shared/api.ts" },
+    { "path": "/asset/importFromDataUrl", "method": "POST", "source": "src/shared/api.ts" },
+    { "path": "/asset/update", "method": "PATCH", "source": "src/shared/api.ts" },
+    { "path": "/tag/assign", "method": "POST", "source": "src/shared/api.ts" },
+    {
+      "path": "/asset/fullPageSession/fp___capability_probe___",
+      "method": "POST",
+      "probe": true,
+      "source": "src/shared/fullpage-session-api.ts"
+    },
+    { "path": "/asset/fullPageSession/start", "method": "POST", "source": "src/shared/fullpage-session-api.ts" },
+    { "path": "/asset/fullPageSession/append", "method": "POST", "source": "src/shared/fullpage-session-api.ts" },
+    { "path": "/asset/fullPageSession/finish", "method": "POST", "source": "src/shared/fullpage-session-api.ts" },
+    {
+      "path": "/asset/fullPageSession/{sessionId}",
+      "method": "DELETE",
+      "source": "src/shared/fullpage-session-api.ts"
+    },
+    {
+      "path": "/asset/articleBundleSession/ab___capability_probe___",
+      "method": "POST",
+      "probe": true,
+      "source": "src/shared/article-bundle-session-api.ts"
+    },
+    {
+      "path": "/asset/articleBundleSession/start",
+      "method": "POST",
+      "source": "src/shared/article-bundle-session-api.ts"
+    },
+    {
+      "path": "/asset/articleBundleSession/append",
+      "method": "POST",
+      "source": "src/shared/article-bundle-session-api.ts"
+    },
+    {
+      "path": "/asset/articleBundleSession/finish",
+      "method": "POST",
+      "source": "src/shared/article-bundle-session-api.ts"
+    },
+    {
+      "path": "/asset/articleBundleSession/{sessionId}",
+      "method": "DELETE",
+      "source": "src/shared/article-bundle-session-api.ts"
+    },
+    { "path": "/asset/pageVideoImport", "method": "POST", "source": "src/shared/page-video-import-api.ts" },
+    {
+      "path": "/asset/pageVideoImport/batch",
+      "method": "POST",
+      "source": "src/shared/page-video-import-api.ts"
+    },
+    {
+      "path": "/asset/pageVideoImport/jobs/{jobId}",
+      "method": "GET",
+      "source": "src/shared/page-video-import-api.ts"
+    },
+    {
+      "path": "/asset/pageVideoImport/jobs/{jobId}",
+      "method": "DELETE",
+      "source": "src/shared/page-video-import-api.ts"
+    }
+  ]
+}

@@ -57,6 +57,45 @@ button.primary {
   color: #475569;
 }
 
+.page-video-paste {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.page-video-paste summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.page-video-hint {
+  margin: 8px 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.page-video-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: 12px/1.4 ui-monospace, monospace;
+  resize: vertical;
+}
+
+.page-video-toolbar {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.page-video-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #475569;
+}
+
 .import-details {
   margin: 6px 0 0;
   padding: 8px 12px 8px 24px;

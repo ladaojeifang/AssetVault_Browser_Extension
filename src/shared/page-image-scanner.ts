@@ -11,6 +11,7 @@
  */
 
 import { absoluteUrl, filenameFromUrl } from './collect-meta-core'
+import { bestFromSrcset, isNoiseImageUrl } from './image-url-resolve'
 import type { CollectMeta } from './types'
 
 /* ------------------------------------------------------------------ */
@@ -88,10 +89,7 @@ function isLikelyImageUrl(url: string): boolean {
 }
 
 function isAdOrNoiseUrl(url: string): boolean {
-  if (/pixel|tracking|analytics|spacer|1x1|favicon|logo\.(?:png|svg)/i.test(url)) return true
-  if (/avatar|profile_images|profile_banners|\/emoji\//i.test(url)) return true
-  if (/ads?\.|doubleclick|googlesyndication/i.test(url)) return true
-  return false
+  return isNoiseImageUrl(url)
 }
 
 function urlQualityBoost(url: string): number {
@@ -119,27 +117,6 @@ function scoreCandidate(
   }
 
   return score
-}
-
-function bestFromSrcset(srcset: string, pageUrl: string): string | null {
-  let bestUrl = ''
-  let bestScore = 0
-  for (const part of srcset.split(',')) {
-    const chunk = part.trim()
-    if (!chunk) continue
-    const m = chunk.match(/^(\S+)\s+(\d+(?:\.\d+)?)(w|x)$/i)
-    if (m) {
-      const numeric = m[3].toLowerCase() === 'w' ? Number(m[2]) : Number(m[2]) * 1000
-      if (numeric >= bestScore) {
-        bestScore = numeric
-        bestUrl = m[1]
-      }
-      continue
-    }
-    const bare = chunk.split(/\s+/)[0]
-    if (bare.startsWith('http')) bestUrl = bare
-  }
-  return bestUrl ? absoluteUrl(bestUrl, pageUrl) : null
 }
 
 function walkDeep(cb: (root: Document | ShadowRoot | Element) => void): void {

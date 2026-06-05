@@ -1,0 +1,898 @@
+openapi: 3.1.0
+info:
+  title: AssetVault Pro Web API
+  version: 1.0.0
+  description: |
+    本地 HTTP API（应用运行时可访问）。默认 `http://127.0.0.1:41596/api/v1/`。
+
+    - 响应格式：[JSend](https://github.com/omniti-labs/jsend)
+    - 本机访问默认无需 Token；开启「允许远程」后须 `Authorization: Bearer <token>` 或 `?token=`
+    - Playground：`/api/v1/playground/`
+  contact:
+    name: AssetVault Pro
+servers:
+  - url: http://127.0.0.1:41596/api/v1
+    description: 默认本机（端口可在设置中修改）
+
+tags:
+  - name: app
+  - name: library
+  - name: asset
+  - name: folder
+  - name: tag
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    queryToken:
+      type: apiKey
+      in: query
+      name: token
+  schemas:
+    JSendSuccess:
+      type: object
+      required: [status, data]
+      properties:
+        status:
+          type: string
+          enum: [success]
+        data: {}
+    JSendError:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: string
+          enum: [error]
+        code:
+          type: string
+        message:
+          type: string
+    AppInfo:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        apiVersion: { type: string, enum: [v1] }
+        platform: { type: string }
+        packaged: { type: boolean }
+        features:
+          type: array
+          items: { type: string }
+        ytdlp:
+          type: object
+          properties:
+            version: { type: string, nullable: true }
+            ffmpegPresent: { type: boolean }
+        limits:
+          type: object
+          properties:
+            pageVideoImport:
+              type: object
+              properties:
+                maxBatchItems: { type: integer }
+                maxConcurrentJobs:
+                  type: integer
+                  description: Config cap 2; implementation currently runs one yt-dlp child at a time
+                maxActiveJobs: { type: integer, description: queued + running cap (default 100) }
+                jobTimeoutMs: { type: integer }
+                stallTimeoutMs: { type: integer }
+                pollIntervalMsRecommended: { type: integer }
+    AssetDto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        fileType: { type: string }
+        filePath: { type: string }
+        resolvedFilePath: { type: string }
+        notes: { type: string }
+        sourceUrl: { type: string }
+        importedAt: { type: string, format: date-time }
+        tagIds: { type: array, items: { type: string } }
+        folderIds: { type: array, items: { type: string } }
+    AssetListPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/AssetDto' }
+        total: { type: integer }
+        offset: { type: integer }
+        limit: { type: integer }
+    FolderDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        parentId: { type: string, nullable: true }
+        path: { type: string }
+        level: { type: integer }
+        assetCount: { type: integer }
+    TagDto:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+        usageCount: { type: integer }
+
+paths:
+  /app/info:
+    get:
+      tags: [app]
+      summary: 应用信息
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AppInfo' }
+
+  /library/info:
+    get:
+      tags: [library]
+      summary: 当前资料库元数据
+      responses:
+        '200': { description: OK }
+
+  /library/state:
+    get:
+      tags: [library]
+      summary: 活动库与最近列表
+      responses:
+        '200': { description: OK }
+
+  /library/importFromLibrary:
+    post:
+      tags: [library]
+      summary: 从其它资料库整库导入（archive→archive 或 catalog→catalog）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sourceLibraryRoot]
+              properties:
+                sourceLibraryRoot:
+                  type: string
+                  description: 源资料库根目录（须与当前库同为 archive 或同为 catalog）
+      responses:
+        '200':
+          description: 导入成功（catalog 合并时 data 含 importMode、assetsAddedLocal 等扩展字段）
+        '400':
+          description: 无效路径、源库模式不符或 archive/catalog 组合不支持
+        '409':
+          description: 目标库模式不符或已有导入任务进行中
+
+  /asset/get:
+    get:
+      tags: [asset]
+      summary: 分页查询资产
+      parameters:
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: folderId, in: query, schema: { type: string } }
+        - { name: fileType, in: query, schema: { type: string } }
+        - { name: sortBy, in: query, schema: { type: string } }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/JSendSuccess'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AssetListPage' }
+    post:
+      tags: [asset]
+      summary: 复杂条件查询（body 同 query 参数）
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/info:
+    get:
+      tags: [asset]
+      summary: 单条资产
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '404': { description: 资产不存在 }
+
+  /asset/import:
+    post:
+      tags: [asset]
+      summary: 从本机路径导入
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePath]
+              properties:
+                filePath: { type: string, example: 'G:\\images\\photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromURL:
+    post:
+      tags: [asset]
+      summary: 从 URL 导入直链媒体（主进程下载；作品页 URL 返回 400 并提示 pageVideoImport）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://example.com/photo.jpg' }
+                filename: { type: string, example: 'photo.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200': { description: OK }
+
+  /asset/fetchRemoteBody:
+    post:
+      tags: [asset]
+      summary: 主进程下载 URL 并返回 dataUrl（不入库；Markdown 资料包）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, example: 'https://cdn.example.com/photo.jpg' }
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: Optional download headers (Referer, User-Agent, Accept, Accept-Language)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [success] }
+                  data:
+                    type: object
+                    properties:
+                      dataUrl: { type: string }
+                      bytes: { type: integer }
+                      contentType: { type: string, nullable: true }
+
+  /asset/fullPageSession/start:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 创建整页截图拼接会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [layout, output]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/append:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 登记条带图片（本机路径，须在会话 tempDir 内）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, stripIndex, filePath, stripHeightPx]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/finish:
+    post:
+      tags: [asset, fullPageSession]
+      summary: 纵向拼接条带并导入为单个资产
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId]
+      responses:
+        '200': { description: OK }
+
+  /asset/fullPageSession/{sessionId}:
+    get:
+      tags: [asset, fullPageSession]
+      summary: 查询整页截图会话状态
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, fullPageSession]
+      summary: 取消会话并删除临时文件
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/start:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 开启 Markdown 资料包导入会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [output]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/append:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 登记资料包文件（本机路径，须在会话 tempDir 内）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, relativePath, filePath]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/finish:
+    post:
+      tags: [asset, articleBundleSession]
+      summary: 校验资料包并导入为单个资产
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sessionId, requiredFiles]
+      responses:
+        '200': { description: OK }
+
+  /asset/articleBundleSession/{sessionId}:
+    get:
+      tags: [asset, articleBundleSession]
+      summary: 查询资料包会话状态
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, articleBundleSession]
+      summary: 取消资料包会话并删除临时文件
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/pageVideoImport:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: 创建作品页视频导入任务（yt-dlp 异步 Job，无 300MB 上限）
+      description: |
+        Requires open library (LIBRARY_NOT_READY 503). Rejects direct CDN/media URLs (PAGE_VIDEO_NOT_SUPPORTED).
+        Jobs persisted to userData/AssetVault/page-video-jobs.json (may contain cookieHeader plaintext).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+                platform: { type: string }
+                format: { type: string, description: '省略时按 platform 选择预设（如 bilibili 1080p DASH）' }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                  default: none
+                cookiesFile:
+                  type: string
+                  description: Netscape cookies.txt 本机路径
+                cookieHeader:
+                  type: string
+                  description: 'DevTools 复制的 Cookie 值（不含 Cookie: 前缀）'
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                  description: replace 视为 import_copy，warnings 含 REPLACE_NOT_IMPLEMENTED
+                options:
+                  type: object
+                  properties:
+                    writeSubs:
+                      type: boolean
+                      description: Passes --write-subs to yt-dlp; subtitle files stay in temp only and are not imported as assets
+                    subtitleLangs: { type: array, items: { type: string } }
+                    noPlaylist: { type: boolean, default: true }
+                sourceMeta:
+                  type: object
+                  properties:
+                    pageUrl: { type: string }
+                    pageTitle: { type: string }
+      responses:
+        '200': { description: OK }
+        '503': { description: YTDLP_NOT_INSTALLED or LIBRARY_NOT_READY }
+
+  /asset/pageVideoImport/batch:
+    post:
+      tags: [asset, pageVideoImport]
+      summary: 批量创建作品页视频导入任务
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                platform: { type: string }
+                format: { type: string }
+                cookiesFromBrowser:
+                  type: string
+                  enum: [edge, chrome, firefox, none]
+                cookiesFile: { type: string }
+                cookieHeader: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [import_copy, use_existing, replace]
+                targetFolderId: { type: string, nullable: true }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string }
+                      platform: { type: string }
+                      format: { type: string }
+                      cookieHeader: { type: string }
+                      cookiesFile: { type: string }
+                      cookiesFromBrowser:
+                        type: string
+                        enum: [edge, chrome, firefox, none]
+      responses:
+        '200': { description: OK }
+
+  /asset/pageVideoImport/batch/{batchId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: 查询批量作品页视频导入任务（全部 job 公开状态）
+      description: Returns 404 BATCH_NOT_FOUND when no jobs remain for this batchId (e.g. after 24h retention purge).
+      parameters:
+        - name: batchId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: BATCH_NOT_FOUND }
+
+  /asset/pageVideoImport/jobs/{jobId}:
+    get:
+      tags: [asset, pageVideoImport]
+      summary: 查询作品页视频导入任务
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+    delete:
+      tags: [asset, pageVideoImport]
+      summary: 取消作品页视频导入任务
+      description: |
+        Queued jobs cancel immediately with filesRemoved true. Running jobs set cancelRequested and kill yt-dlp;
+        response may still show running with filesRemoved false until polled as cancelled.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: JOB_NOT_FOUND }
+
+  /asset/importFromDataUrl:
+    post:
+      tags: [asset]
+      summary: 从 data URL 导入（主进程导入截图结果）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataUrl]
+              properties:
+                dataUrl: { type: string, example: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..." }
+                filename: { type: string, example: "screenshot.jpg" }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importBatch:
+    post:
+      tags: [asset]
+      summary: 批量导入
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filePaths]
+              properties:
+                filePaths: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/importFromURLBatch:
+    post:
+      tags: [asset]
+      summary: 批量从 URL 导入（主进程下载）
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [url]
+                    properties:
+                      url: { type: string, example: 'https://example.com/a.jpg' }
+                      filename: { type: string, example: 'a.jpg' }
+                targetFolderId: { type: string }
+                duplicatePolicy:
+                  type: string
+                  enum: [ask, use_existing, import_copy]
+                  default: use_existing
+      responses:
+        '200': { description: OK }
+
+  /asset/importFolder:
+    post:
+      tags: [asset]
+      summary: 递归导入文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderPath]
+              properties:
+                folderPath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/delete:
+    delete:
+      tags: [asset]
+      summary: 删除资产
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /asset/update:
+    patch:
+      tags: [asset]
+      summary: 更新备注、来源链接或 metadata
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+        notes: { type: string }
+        sourceUrl: { type: string }
+        metadata: { type: object }
+      responses:
+        '200': { description: OK }
+
+  /asset/rename:
+    post:
+      tags: [asset]
+      summary: 重命名资产
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, newName]
+              properties:
+                id: { type: string }
+                newName: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/relink:
+    post:
+      tags: [asset]
+      summary: 索引库重链源文件
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetId, newSourcePath]
+              properties:
+                assetId: { type: string }
+                newSourcePath: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /asset/localize:
+    post:
+      tags: [asset]
+      summary: 索引资产本地化到完整库
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/get:
+    get:
+      tags: [folder]
+      summary: 文件夹列表（扁平）
+      responses:
+        '200': { description: OK }
+
+  /folder/tree:
+    get:
+      tags: [folder]
+      summary: 文件夹树
+      responses:
+        '200': { description: OK }
+
+  /folder/info:
+    get:
+      tags: [folder]
+      summary: 单个文件夹
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /folder/create:
+    post:
+      tags: [folder]
+      summary: 创建文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                parentId: { type: string, nullable: true }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/update:
+    patch:
+      tags: [folder]
+      summary: 更新文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+                icon: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /folder/delete:
+    delete:
+      tags: [folder]
+      summary: 删除文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /folder/move:
+    post:
+      tags: [folder]
+      summary: 移动文件夹
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                newParentId: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/get:
+    get:
+      tags: [tag]
+      summary: 标签列表
+      responses:
+        '200': { description: OK }
+
+  /tag/info:
+    get:
+      tags: [tag]
+      summary: 单个标签
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/create:
+    post:
+      tags: [tag]
+      summary: 创建标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+                description: { type: string, nullable: true }
+      responses:
+        '200': { description: OK }
+
+  /tag/update:
+    patch:
+      tags: [tag]
+      summary: 更新标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/delete:
+    delete:
+      tags: [tag]
+      summary: 删除标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id: { type: string }
+      responses:
+        '200': { description: OK }
+
+  /tag/assign:
+    post:
+      tags: [tag]
+      summary: 为资产打标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }
+
+  /tag/remove:
+    post:
+      tags: [tag]
+      summary: 移除资产标签
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assetIds, tagIds]
+              properties:
+                assetIds: { type: array, items: { type: string } }
+                tagIds: { type: array, items: { type: string } }
+      responses:
+        '200': { description: OK }

@@ -1,3 +1,5 @@
+import type { PageVideoFormatPreset } from './page-video-format-presets'
+
 export type JSendSuccess<T> = { status: 'success'; data: T }
 export type JSendError = { status: 'error'; code: string; message: string }
 
@@ -7,6 +9,7 @@ export type ExtensionPreferences = {
   defaultFolderId: string
   duplicatePolicy: 'use_existing' | 'import_copy'
   enableDragSaver: boolean
+  pageVideoFormatPreset: PageVideoFormatPreset
 }
 
 export type CollectMeta = {

@@ -47,3 +47,24 @@
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+.assetvault-toast.has-action {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.assetvault-toast-cancel {
+  border: 1px solid rgba(248, 250, 252, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: #f8fafc;
+  font: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.assetvault-toast-cancel:hover {
+  background: rgba(248, 250, 252, 0.12);
+}

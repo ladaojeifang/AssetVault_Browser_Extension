@@ -6,4 +6,5 @@ release/
 *.pem
 .DS_Store
 tsc_errors.txt
+src/shared/api-contract.generated.ts
 .codebuddy/

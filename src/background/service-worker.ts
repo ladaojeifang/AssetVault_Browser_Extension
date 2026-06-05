@@ -10,9 +10,10 @@ import {
 import { metaFromContextMenuInfo } from '../shared/collect-meta-core'
 import { getPreferences } from '../shared/config'
 import type { CollectMeta } from '../shared/types'
-import { ensureHostPermissionForUrl } from '../shared/host-permissions'
+import { ensureHostPermissionForUrl, HOST_PERMISSION_DENIED_MSG } from '../shared/host-permissions'
 import {
   dismissShotUI,
+  ensureContentScriptForTab,
   findTabForBatchRescan,
   requestSaveMetaFromTab,
   resolveVideoCandidatesInTab,
@@ -51,6 +52,15 @@ import {
   setupFullpageInTab,
 } from '../shared/fullpage-tab-bridge'
 import { orchestratePageMarkdownExport, abortPageMarkdown } from '../page-markdown/page-markdown-export'
+import {
+  abortPageVideoImportJob,
+  getPageVideoCapabilitiesForTab,
+  orchestratePageVideoImport,
+  orchestratePageVideoImportBatch,
+  orchestratePageVideoImportFromText,
+  preflightPageVideoImport
+} from './page-video-import'
+import { supportsPageVideoImportApi } from '../shared/page-video-import-api'
 
 /** Default concurrency for batch download operations. */
 const BATCH_DOWNLOAD_CONCURRENCY = 2
@@ -166,6 +176,7 @@ async function executeBatchImportWithProgress(args: {
 
 const MENU_ID = 'assetvault-save-image'
 const MENU_PAGE_MD_ID = 'assetvault-save-page-md'
+const MENU_PAGE_VIDEO_ID = 'assetvault-save-page-video'
 
 /** Per-tab full-page jobs; abort via SCREENSHOT_ABORT (matches tab when known). */
 const activeFullpageCaptures = new Map<number, { abort: boolean }>()
@@ -258,6 +269,11 @@ chrome.runtime.onInstalled.addListener(() => {
       title: '保存正文为 Markdown',
       contexts: ['page', 'selection']
     })
+    chrome.contextMenus.create({
+      id: MENU_PAGE_VIDEO_ID,
+      title: '保存视频到 AssetVault Pro',
+      contexts: ['page', 'link', 'video']
+    })
   })
 })
 
@@ -267,6 +283,30 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === MENU_PAGE_MD_ID) {
     const prefs = await getPreferences()
     void orchestratePageMarkdownExport(tab.id, prefs.defaultFolderId || undefined).catch(() => {})
+    return
+  }
+
+  if (info.menuItemId === MENU_PAGE_VIDEO_ID) {
+    const raw = info.linkUrl || tab.url || ''
+    const granted = tab.url ? await ensureHostPermissionForUrl(tab.url).catch(() => false) : false
+    if (!granted && tab.url) {
+      await notify(tab.id, HOST_PERMISSION_DENIED_MSG)
+      return
+    }
+    const preflight = await preflightPageVideoImport({ tab, url: raw || undefined })
+    if (!preflight.ok) {
+      await notify(tab.id, preflight.error)
+      return
+    }
+    void orchestratePageVideoImport({
+      tab,
+      url: raw || undefined,
+      notify,
+      onJobStarted: notifyPageVideoJobActive,
+      prep: preflight.prep
+    }).catch((e) => {
+      void notify(tab.id!, e instanceof Error ? e.message : String(e))
+    })
     return
   }
 
@@ -473,6 +513,91 @@ async function routeMessage(message: BgMessage, sender: chrome.runtime.MessageSe
       if (tabId) abortPageMarkdown(tabId)
       return { ok: true }
     }
+    case 'GET_PAGE_VIDEO_CAPABILITIES': {
+      const tab =
+        message.tabId != null
+          ? await chrome.tabs.get(message.tabId).catch(() => null)
+          : await getActiveTabOrThrow().catch(() => null)
+      if (!tab?.id) return { ok: false, error: '无法定位当前标签页' }
+      const caps = await getPageVideoCapabilitiesForTab(tab)
+      return { ok: true, pageVideo: caps }
+    }
+    case 'IMPORT_PAGE_VIDEO': {
+      const tab =
+        message.tabId != null
+          ? await chrome.tabs.get(message.tabId).catch(() => null)
+          : sender.tab?.id
+            ? sender.tab
+            : await getActiveTabOrThrow().catch(() => null)
+      if (!tab?.id) return { ok: false, error: '无法定位当前标签页' }
+      const preflight = await preflightPageVideoImport({
+        tab,
+        url: message.url,
+        cookieHeader: message.cookieHeader
+      })
+      if (!preflight.ok) {
+        await flashPageVideoBadge('✕', '#c0392b')
+        await notify(tab.id, preflight.error)
+        return { ok: false, error: preflight.error }
+      }
+      await flashPageVideoBadge('…', '#666')
+      void orchestratePageVideoImport({
+        tab,
+        url: message.url,
+        notify,
+        onJobStarted: notifyPageVideoJobActive,
+        onJobFinished: notifyPageVideoJobFinished,
+        prep: preflight.prep
+      }).catch((e) => {
+        void flashPageVideoBadge('✕', '#c0392b')
+        void notify(tab.id!, e instanceof Error ? e.message : String(e))
+      })
+      return { ok: true, started: true }
+    }
+    case 'IMPORT_PAGE_VIDEO_BATCH': {
+      const tab =
+        message.tabId != null
+          ? await chrome.tabs.get(message.tabId).catch(() => null)
+          : sender.tab?.id
+            ? sender.tab
+            : await getActiveTabOrThrow().catch(() => null)
+      if (!tab?.id) return { ok: false, error: '无法定位当前标签页' }
+      await flashPageVideoBadge('…', '#666')
+      return orchestratePageVideoImportBatch({
+        tab,
+        items: message.items,
+        notify,
+        onJobFinished: notifyPageVideoJobFinished
+      }).then(async (result) => {
+        if (result.ok) {
+          await flashPageVideoBadge(result.failed > 0 ? '!' : '✓', result.failed > 0 ? '#e67e22' : '#27ae60')
+        } else {
+          await flashPageVideoBadge('✕', '#c0392b')
+        }
+        return result
+      })
+    }
+    case 'IMPORT_PAGE_VIDEO_ABORT': {
+      abortPageVideoImportJob(message.jobId)
+      return { ok: true }
+    }
+    case 'IMPORT_PAGE_VIDEO_FROM_TEXT': {
+      const tab =
+        message.tabId != null
+          ? await chrome.tabs.get(message.tabId).catch(() => null)
+          : sender.tab?.id
+            ? sender.tab
+            : await getActiveTabOrThrow().catch(() => null)
+      if (!tab?.id) return { ok: false, error: '无法定位当前标签页' }
+      if (!(await supportsPageVideoImportApi())) {
+        return { ok: false, error: '本机 Pro 未启用作品页视频导入' }
+      }
+      return orchestratePageVideoImportFromText({
+        tab,
+        lines: message.lines,
+        notify
+      })
+    }
     default:
       return { ok: false, error: 'Unknown message' }
   }
@@ -517,7 +642,57 @@ function filenameFromUrl(url: string, fallbackTitle: string): string {
   return `${safe || 'image'}.jpg`
 }
 
+async function notifyPageVideoJobActive(tabId: number, jobId: string): Promise<void> {
+  try {
+    await ensureContentScriptForTab(tabId)
+    await chrome.tabs.sendMessage(tabId, { type: 'PAGE_VIDEO_JOB_ACTIVE', jobId })
+  } catch {
+    /* ignore */
+  }
+}
+
+async function notifyPageVideoJobFinished(
+  tabId: number,
+  job: import('../shared/page-video-import-types').PageVideoJob
+): Promise<void> {
+  if (job.status === 'completed') {
+    await flashPageVideoBadge('✓', '#27ae60')
+    return
+  }
+  if (job.status === 'failed') {
+    await flashPageVideoBadge('!', '#e67e22')
+    try {
+      await ensureContentScriptForTab(tabId)
+      const { formatPageVideoDiagnostics } = await import('../shared/page-video-import-errors')
+      await chrome.tabs.sendMessage(tabId, {
+        type: 'PAGE_VIDEO_JOB_FAILED',
+        text: job.error?.message ?? '视频导入失败',
+        diagnostics: formatPageVideoDiagnostics(job)
+      })
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+async function flashPageVideoBadge(text: string, color: string): Promise<void> {
+  try {
+    await chrome.action.setBadgeText({ text })
+    await chrome.action.setBadgeBackgroundColor({ color })
+    setTimeout(() => {
+      void clearActionBadge()
+    }, 3500)
+  } catch {
+    /* ignore */
+  }
+}
+
 async function notify(tabId: number, text: string): Promise<void> {
+  try {
+    await ensureContentScriptForTab(tabId)
+  } catch {
+    /* tab may not allow injection */
+  }
   try {
     await chrome.tabs.sendMessage(tabId, { type: 'TOAST', text })
   } catch {

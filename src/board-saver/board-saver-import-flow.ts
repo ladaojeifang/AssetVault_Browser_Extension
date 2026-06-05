@@ -101,3 +101,27 @@ export async function runBoardSaverBatchImport(
   }
   return { ok: false, aggregate, error: lastError || '导入失败' }
 }
+
+export type VideoPageBatchImportResult =
+  | { ok: true; succeeded: number; failed: number }
+  | { ok: false; error: string }
+
+export async function runBoardSaverVideoPageImport(
+  items: Array<{ url: string; platform?: string; pageTitle?: string }>,
+): Promise<VideoPageBatchImportResult> {
+  if (!items.length) {
+    return { ok: false, error: '没有可提交的视频作品' }
+  }
+  try {
+    const resp = (await chrome.runtime.sendMessage({
+      type: 'IMPORT_PAGE_VIDEO_BATCH',
+      items,
+    })) as VideoPageBatchImportResult & { ok?: boolean; error?: string }
+    if (resp?.ok && 'succeeded' in resp) {
+      return { ok: true, succeeded: resp.succeeded, failed: resp.failed }
+    }
+    return { ok: false, error: resp?.error ?? '视频批量导入失败' }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+}

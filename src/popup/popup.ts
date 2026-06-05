@@ -1,5 +1,6 @@
 import { getFolderTree } from '../shared/api'
 import { getPreferences, setPreferences } from '../shared/config'
+import { normalizePageVideoFormatPreset } from '../shared/page-video-format-presets'
 import { ensureHostPermissionForTab, HOST_PERMISSION_DENIED_MSG } from '../shared/host-permissions'
 import { BATCH_DRAFT_KEY } from '../shared/messages'
 import { injectableTabMessage, injectShotUI, resolveVideoCandidatesInTab } from '../shared/tab-messaging'
@@ -78,6 +79,7 @@ async function init(): Promise<void> {
   el<HTMLInputElement>('token').value = prefs.token
   el<HTMLSelectElement>('duplicatePolicy').value = prefs.duplicatePolicy
   el<HTMLInputElement>('enableDragSaver').checked = prefs.enableDragSaver
+  el<HTMLSelectElement>('pageVideoFormatPreset').value = prefs.pageVideoFormatPreset
 
   await loadFolders(prefs.defaultFolderId)
   await refreshStatus()
@@ -88,7 +90,10 @@ async function init(): Promise<void> {
       token: el<HTMLInputElement>('token').value,
       defaultFolderId: el<HTMLSelectElement>('defaultFolderId').value,
       duplicatePolicy: el<HTMLSelectElement>('duplicatePolicy').value as 'use_existing' | 'import_copy',
-      enableDragSaver: el<HTMLInputElement>('enableDragSaver').checked
+      enableDragSaver: el<HTMLInputElement>('enableDragSaver').checked,
+      pageVideoFormatPreset: normalizePageVideoFormatPreset(
+        el<HTMLSelectElement>('pageVideoFormatPreset').value
+      )
     })
     await refreshStatus()
     await loadFolders(el<HTMLSelectElement>('defaultFolderId').value)
@@ -112,6 +117,66 @@ async function init(): Promise<void> {
     })
   })
 
+  // ── Page video import (Pro yt-dlp) ─────────────────────────────────
+  const importPageVideoBtn = el<HTMLButtonElement>('importPageVideo')
+  const importPageVideoHint = el<HTMLParagraphElement>('importPageVideoHint')
+
+  async function refreshPageVideoButton(tab: chrome.tabs.Tab): Promise<void> {
+    try {
+      const resp = await chrome.runtime.sendMessage({
+        type: 'GET_PAGE_VIDEO_CAPABILITIES',
+        tabId: tab.id
+      })
+      const pv = resp?.ok ? resp.pageVideo : null
+      if (!pv?.apiSupported) {
+        importPageVideoBtn.disabled = true
+        importPageVideoHint.textContent =
+          '当前 Pro 未支持作品页视频导入，请升级桌面端后再试。'
+        return
+      }
+      if (!pv.isVideoPage) {
+        importPageVideoBtn.disabled = true
+        importPageVideoHint.textContent =
+          '当前页不是支持的视频作品页（如 YouTube 播放页、B站视频页）。'
+        return
+      }
+      importPageVideoBtn.disabled = false
+      const ver = pv.proVersion ? ` · Pro ${pv.proVersion}` : ''
+      const ytdlp = pv.ytdlpVersion ? ` · yt-dlp ${pv.ytdlpVersion}` : ''
+      importPageVideoHint.textContent =
+        `将提交给 Pro 下载：${pv.canonicalUrl ?? tab.url ?? ''}${ver}${ytdlp}`
+    } catch {
+      importPageVideoBtn.disabled = true
+      importPageVideoHint.textContent = '无法检测当前页视频状态'
+    }
+  }
+
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  if (activeTab?.id) {
+    void refreshPageVideoButton(activeTab)
+  } else {
+    importPageVideoBtn.disabled = true
+  }
+
+  importPageVideoBtn.addEventListener('click', () => {
+    void withActiveTabPermission(async (tab) => {
+      if (!tab.id || !tab.url) return
+      try {
+        const resp = await chrome.runtime.sendMessage({
+          type: 'IMPORT_PAGE_VIDEO',
+          tabId: tab.id
+        })
+        if (!resp?.ok) {
+          alert(resp?.error ?? '提交失败')
+          return
+        }
+        window.close()
+      } catch (e) {
+        alert(e instanceof Error ? e.message : String(e))
+      }
+    })
+  })
+
   // ── Page Markdown Export ───────────────────────────────────────────
   el<HTMLButtonElement>('exportPageMd').addEventListener('click', () => {
     void withActiveTabPermission(async (tab) => {
@@ -122,6 +187,22 @@ async function init(): Promise<void> {
       } catch (e) {
         alert(e instanceof Error ? e.message : String(e))
       }
+    })
+  })
+
+  el<HTMLButtonElement>('batchPageVideoPaste').addEventListener('click', () => {
+    void withActiveTabPermission(async (tab) => {
+      if (!tab.id) return
+      await chrome.storage.local.set({
+        [BATCH_DRAFT_KEY]: {
+          pageTitle: tab.title ?? '',
+          pageUrl: tab.url ?? '',
+          sourceTabId: tab.id,
+          items: []
+        }
+      })
+      await chrome.tabs.create({ url: chrome.runtime.getURL('batch.html#page-video') })
+      window.close()
     })
   })
 

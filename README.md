@@ -117,11 +117,20 @@ pnpm run package:crx
 
 ```text
 work/soft_script/
-  AssetVault_Pro/              # Electron 桌面端
+  AssetVault.code-workspace    # 可选：Cursor 多根工作区
+  AssetVault_Pro/              # Electron 桌面端（API 真源）
   AssetVault_Browser_Extension/  # 本仓库
 ```
 
-修改 Web API 契约时：先改桌面端 `doc/web-api-v1-guide.md` 与 OpenAPI，再改本仓库 `src/shared/api.ts` 等调用处。
+完整流程见 **[docs/cross-repo-workflow.md](docs/cross-repo-workflow.md)**。
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm run contract:sync` | 从 Pro 复制 OpenAPI 到 `contracts/` |
+| `pnpm run contract:check` | 校验扩展调用面 ⊆ OpenAPI（`pnpm test` 已包含） |
+| `pnpm run smoke:pro` | Pro 运行时探测 `GET /app/info` |
+
+修改 Web API 契约时：先改 Pro 的 guide + OpenAPI → `contract:sync` → 改 `src/shared/api.ts` 等 → 更新 `contracts/extension-api-surface.json`。
 
 初始化 Git（可选）：
 

@@ -14,11 +14,16 @@ export const BUILTIN_RULES: PageMdRule[] = [
     mainColumnSelector: '#js_content',
     titleSelector: '#activity-name',
     postProcessDom: (root) => {
-      // WeChat images often use data-src
-      const imgs = root.querySelectorAll('img')
-      imgs.forEach(img => {
-        const dataSrc = img.getAttribute('data-src')
-        if (dataSrc) img.setAttribute('src', dataSrc)
+      root.querySelectorAll('img').forEach((img) => {
+        const src = img.getAttribute('src') || ''
+        const real =
+          img.getAttribute('data-src') ||
+          img.getAttribute('data-originalsrc') ||
+          img.getAttribute('data-mmsrc') ||
+          ''
+        if (!real) return
+        const placeholder = /^data:image\/(gif|svg)/i.test(src)
+        if (placeholder || !/^https?:/i.test(src)) img.setAttribute('src', real)
       })
     }
   },
@@ -40,10 +45,14 @@ export const BUILTIN_RULES: PageMdRule[] = [
     match: (url) => url.includes('blog.csdn.net'),
     mainColumnSelector: '#content_views',
     postProcessDom: (root) => {
-      // Remove copy buttons and extra crap inside pre
-      root.querySelectorAll('.hljs-button').forEach(btn => btn.remove())
+      root.querySelectorAll('.hljs-button').forEach((btn) => btn.remove())
     }
-  }
+  },
+  {
+    id: 'wordpress-entry-content',
+    match: (url) => /pc528\.net|pc520\.net/i.test(url),
+    mainColumnSelector: '.entry-content',
+  },
 ]
 
 export function findMatchingRule(url: string): PageMdRule | undefined {

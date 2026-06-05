@@ -85,6 +85,11 @@ async function ensureContentScript(tabId: number): Promise<void> {
   await new Promise((r) => setTimeout(r, 150))
 }
 
+/** Inject content.js if the tab has no receiver yet (e.g. page video context). */
+export async function ensureContentScriptForTab(tabId: number): Promise<void> {
+  return ensureContentScript(tabId)
+}
+
 async function runPageHook<T>(
   tabId: number,
   hookName: '__assetVaultResolveHd' | '__assetVaultScanBatch'

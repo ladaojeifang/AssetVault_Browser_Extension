@@ -31,6 +31,15 @@ export type BgMessage =
     }
   | { type: 'EXPORT_PAGE_MARKDOWN', tabId?: number }
   | { type: 'EXPORT_PAGE_MARKDOWN_ABORT', tabId?: number }
+  | { type: 'IMPORT_PAGE_VIDEO'; url?: string; tabId?: number; cookieHeader?: string }
+  | {
+      type: 'IMPORT_PAGE_VIDEO_BATCH'
+      items: Array<{ url: string; platform?: string; pageTitle?: string }>
+      tabId?: number
+    }
+  | { type: 'IMPORT_PAGE_VIDEO_ABORT'; jobId: string }
+  | { type: 'GET_PAGE_VIDEO_CAPABILITIES'; tabId?: number }
+  | { type: 'IMPORT_PAGE_VIDEO_FROM_TEXT'; lines: string[]; tabId?: number }
 
 export type BgResponse =
   | {
@@ -45,6 +54,20 @@ export type BgResponse =
       pageUrl?: string
       sourceTabId?: number
       candidates?: MediaCandidate[]
+      pageVideo?: {
+        apiSupported: boolean
+        isVideoPage: boolean
+        platform: string | null
+        canonicalUrl: string | null
+        proVersion?: string
+        ytdlpVersion?: string | null
+      }
+      jobId?: string
+      succeeded?: number
+      failed?: number
+      skippedCount?: number
+      batchId?: string
+      invalidLineCount?: number
     }
   | { ok: false; error: string }
 
@@ -58,6 +81,7 @@ export type ContentMessage =
   | { type: 'SCREENSHOT_UI_START'; mode: 'region' | 'element' }
   | { type: 'RESOLVE_HD_IMAGE' }
   | { type: 'OPEN_BOARD_SAVER' }
+  | { type: 'PAGE_VIDEO_CONTEXT' }
 
 export type HdImageResolvePayload = {
   candidates: Array<{ url: string; source: string }>
@@ -73,6 +97,7 @@ export type ContentResponse =
       candidates?: MediaCandidate[]
       meta?: CollectMeta
       hd?: HdImageResolvePayload
+      context?: { url: string; platform: string; isVideoPage: true } | null
     }
   | { ok: false; error: string }
 

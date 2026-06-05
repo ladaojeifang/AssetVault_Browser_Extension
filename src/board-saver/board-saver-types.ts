@@ -1,5 +1,7 @@
 /** Shared types for board-saver (window + bridge) */
 
+export type BoardSaverItemKind = 'image' | 'video_page'
+
 export type BoardSaverItem = {
   id: string
   url: string
@@ -12,6 +14,10 @@ export type BoardSaverItem = {
   source: string
   /** True if enlargeImageUrl returned a different URL (HD version). */
   isEnlarged: boolean
+  /** Default `image`; `video_page` = canonical作品页 URL for Pro yt-dlp. */
+  kind?: BoardSaverItemKind
+  /** Video platform id when `kind === 'video_page'`. */
+  platform?: string
 }
 
 export const BATCH_IMPORT_SIZE = 20

@@ -1,4 +1,5 @@
 import { apiUrl, getPreferences } from './config'
+import type { FetchRemoteBodyResult } from './api-contract'
 import type {
   FolderNode,
   ImportFromUrlBatchResult,
@@ -68,7 +69,9 @@ export async function apiRequest<T>(
 export async function pingApp(): Promise<{
   name: string
   version: string
-  features?: string[]
+  features?: string[] | Record<string, boolean>
+  ytdlp?: { version?: string | null; ffmpegPresent?: boolean; ready?: boolean }
+  limits?: { pageVideoImport?: Record<string, unknown> }
 }> {
   return apiRequest('/app/info')
 }
@@ -134,6 +137,18 @@ export async function importAsset(body: {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
+  })
+}
+
+export async function fetchRemoteBody(body: {
+  url: string
+  headers?: Record<string, string>
+}): Promise<FetchRemoteBodyResult> {
+  return apiRequest('/asset/fetchRemoteBody', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    timeoutMs: 120_000,
   })
 }
 

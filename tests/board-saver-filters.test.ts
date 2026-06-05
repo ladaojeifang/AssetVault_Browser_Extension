@@ -44,6 +44,15 @@ describe('getFormatExt', () => {
     assert.equal(getFormatExt(item({ url: 'https://cdn.example.com/path/photo.JPG?v=1' })), 'jpg')
     assert.equal(getFormatExt(item({ url: 'not-a-url' })), '')
   })
+
+  it('returns video_page for video作品 cards', () => {
+    assert.equal(
+      getFormatExt(
+        item({ url: 'https://www.bilibili.com/video/BV1xx411c7mD', kind: 'video_page' }),
+      ),
+      'video_page',
+    )
+  })
 })
 
 describe('isLowQualityItem', () => {

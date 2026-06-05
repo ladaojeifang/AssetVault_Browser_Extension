@@ -191,6 +191,22 @@
   background: #10b981;
   color: #fff;
 }
+.bs-badge-video {
+  background: #7c3aed;
+}
+
+.bs-video-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: #5b21b6;
+  font-size: 28px;
+}
+
 .bs-badge-thumb {
   background: rgba(0,0,0,0.5);
   color: #fff;

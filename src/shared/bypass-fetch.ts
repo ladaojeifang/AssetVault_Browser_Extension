@@ -57,11 +57,13 @@ export async function bypassFetch(
     timerId = setTimeout(() => controller.abort(), timeout)
 
     try {
+      const referer = options?.referer
       const res = await fetch(url, {
         method: 'GET',
         mode: 'cors',
-        referrerPolicy: 'no-referrer',
-        headers: buildBypassHeaders(options?.headers, options?.referer),
+        referrer: referer,
+        referrerPolicy: referer ? 'unsafe-url' : 'no-referrer',
+        headers: buildBypassHeaders(options?.headers, referer),
         signal: controller.signal
       })
       clearTimeout(timerId)

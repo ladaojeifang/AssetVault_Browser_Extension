@@ -791,7 +791,68 @@ async function importSelected(): Promise<void> {
   renderImportDetails(batchResults)
 }
 
+async function importPageVideoFromTextarea(): Promise<void> {
+  const textarea = el<HTMLTextAreaElement>('pageVideoUrls')
+  const status = el<HTMLParagraphElement>('pageVideoStatus')
+  const btn = el<HTMLButtonElement>('importPageVideoUrls')
+  const lines = textarea.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  if (!lines.length) {
+    status.textContent = '请粘贴至少一行 URL'
+    return
+  }
+
+  btn.disabled = true
+  status.textContent = '正在解析并提交…'
+
+  try {
+    const caps = await chrome.runtime.sendMessage({
+      type: 'GET_PAGE_VIDEO_CAPABILITIES',
+      tabId: draftMeta.sourceTabId
+    })
+    if (!caps?.ok) {
+      status.textContent = '无法连接 AssetVault Pro，请确认已启动并启用 Web API'
+      return
+    }
+    if (!caps.pageVideo?.apiSupported) {
+      status.textContent =
+        caps.pageVideo?.blockReason ?? '本机 Pro 未启用作品页视频导入（pageVideoImport）'
+      return
+    }
+    if (caps.pageVideo.ytdlpReady === false) {
+      status.textContent =
+        caps.pageVideo.blockReason ??
+        'Pro 未检测到 yt-dlp，请执行 pnpm run fetch:ytdlp 后重启 Pro'
+      return
+    }
+
+    const resp = await chrome.runtime.sendMessage({
+      type: 'IMPORT_PAGE_VIDEO_FROM_TEXT',
+      lines: textarea.value.split(/\r?\n/),
+      tabId: draftMeta.sourceTabId
+    })
+    if (!resp?.ok) {
+      status.textContent = resp?.error ?? '提交失败'
+      return
+    }
+    const invalid = typeof resp.invalidLineCount === 'number' ? resp.invalidLineCount : 0
+    const skipNote = invalid > 0 ? `，跳过无效行 ${invalid}` : ''
+    status.textContent = `完成：成功 ${resp.succeeded}，失败 ${resp.failed}${skipNote}`
+  } catch (e) {
+    status.textContent = e instanceof Error ? e.message : String(e)
+  } finally {
+    btn.disabled = false
+  }
+}
+
 function bind(): void {
+  el<HTMLButtonElement>('importPageVideoUrls').addEventListener('click', () =>
+    void importPageVideoFromTextarea(),
+  )
+
+  if (location.hash === '#page-video') {
+    el<HTMLDetailsElement>('pageVideoPaste').open = true
+  }
+
   el<HTMLButtonElement>('rescan').addEventListener('click', () => void rescanFromSourceTab())
 
   // 全选：只影响当前过滤后可见的项

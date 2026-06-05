@@ -99,7 +99,7 @@ export async function waitForChromeDownload(args: {
         url: args.url,
         filename,
         saveAs: false,
-        conflictAction
+        conflictAction,
       },
       (downloadId) => {
         if (chrome.runtime.lastError) {

@@ -1,5 +1,7 @@
 import { isInjectableTabUrl } from './collect-meta-core'
 
+const BROAD_ORIGIN_PATTERNS = ['<all_urls>', '*://*/*', 'http://*/*', 'https://*/*'] as const
+
 /** Chrome optional_host_permissions pattern for a page URL, e.g. `https://example.com/*`. */
 export function originPatternFromUrl(url: string): string | null {
   if (!isInjectableTabUrl(url)) return null
@@ -10,7 +12,16 @@ export function originPatternFromUrl(url: string): string | null {
   }
 }
 
+/** True when user chose「在所有站点上」/ granted broad host access in extension settings. */
+export async function hasBroadHostAccess(): Promise<boolean> {
+  for (const origin of BROAD_ORIGIN_PATTERNS) {
+    if (await chrome.permissions.contains({ origins: [origin] })) return true
+  }
+  return false
+}
+
 export async function hasHostPermissionForUrl(url: string): Promise<boolean> {
+  if (await hasBroadHostAccess()) return true
   const pattern = originPatternFromUrl(url)
   if (!pattern) return false
   return chrome.permissions.contains({ origins: [pattern] })
@@ -18,6 +29,7 @@ export async function hasHostPermissionForUrl(url: string): Promise<boolean> {
 
 /** Request optional host permission for the tab's origin (user gesture required). */
 export async function ensureHostPermissionForUrl(url: string): Promise<boolean> {
+  if (await hasBroadHostAccess()) return true
   const pattern = originPatternFromUrl(url)
   if (!pattern) return false
   if (await chrome.permissions.contains({ origins: [pattern] })) return true
@@ -35,4 +47,4 @@ export async function ensureHostPermissionForTab(tabId: number): Promise<boolean
 }
 
 export const HOST_PERMISSION_DENIED_MSG =
-  '需要允许访问当前网站才能采集。请在浏览器弹窗中点击「允许」；若未出现弹窗，可能是企业策略限制，请到 chrome://extensions → 本扩展 → 站点访问 中手动开启。'
+  '需要允许访问当前网站才能采集。请在浏览器弹窗中点击「允许」；若未出现弹窗，可能是企业策略限制，请到 edge://extensions → 本扩展 → 站点访问 中手动开启。'

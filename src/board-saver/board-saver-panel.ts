@@ -25,7 +25,7 @@ export function createBoardSaverPanelRoot(): HTMLElement {
       </div>
       <div class="bs-body">
         <div class="bs-grid-wrap" id="bs-grid-wrap">
-          <div class="bs-grid" id="bs-grid"><p class="bs-empty-hint">正在扫描图片…</p></div>
+          <div class="bs-grid" id="bs-grid"><p class="bs-empty-hint">正在扫描图片与视频作品…</p></div>
         </div>
         <div class="bs-filter-sidebar">
           <div class="bs-filter-section"><h4>尺寸</h4><div id="bs-filter-size"></div></div>
@@ -64,26 +64,34 @@ export function createBoardSaverCard(item: BoardSaverItem, options: BoardSaverCa
     '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="white"/><circle cx="12" cy="12" r="12" fill="none" stroke="currentColor" stroke-width="2"/><path d="M7 12l4 4 6-8" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   card.appendChild(check)
 
+  const isVideoPage = item.kind === 'video_page'
   const badge = document.createElement('span')
-  badge.className = `bs-badge${item.isEnlarged ? ' bs-badge-hd' : ' bs-badge-thumb'}`
-  badge.textContent = item.isEnlarged ? 'HD' : '⬇缩略'
+  badge.className = `bs-badge${isVideoPage ? ' bs-badge-video' : item.isEnlarged ? ' bs-badge-hd' : ' bs-badge-thumb'}`
+  badge.textContent = isVideoPage ? '视频' : item.isEnlarged ? 'HD' : '⬇缩略'
   card.appendChild(badge)
 
   const thumb = document.createElement('div')
   thumb.className = 'bs-thumb-wrap'
-  const img = document.createElement('img')
-  img.src = item.url
-  img.loading = 'lazy'
-  img.referrerPolicy = 'no-referrer'
-  img.onerror = () => {
-    if (img.dataset.fallback === '1') return
-    img.dataset.fallback = '1'
-    img.src =
-      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiPjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg=='
-    img.style.padding = '20px'
-    img.style.objectFit = 'none'
+  if (isVideoPage) {
+    const placeholder = document.createElement('div')
+    placeholder.className = 'bs-video-placeholder'
+    placeholder.textContent = '▶'
+    thumb.appendChild(placeholder)
+  } else {
+    const img = document.createElement('img')
+    img.src = item.url
+    img.loading = 'lazy'
+    img.referrerPolicy = 'no-referrer'
+    img.onerror = () => {
+      if (img.dataset.fallback === '1') return
+      img.dataset.fallback = '1'
+      img.src =
+        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9Im5vbmUiPjxyZWN0IHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgZmlsbD0iI2YwZjBmMCIvPjwvc3ZnPg=='
+      img.style.padding = '20px'
+      img.style.objectFit = 'none'
+    }
+    thumb.appendChild(img)
   }
-  thumb.appendChild(img)
   card.appendChild(thumb)
 
   const info = document.createElement('div')
@@ -104,7 +112,8 @@ export function createBoardSaverCard(item: BoardSaverItem, options: BoardSaverCa
   const meta = document.createElement('div')
   meta.className = 'bs-meta-line'
   const dim = item.width && item.height ? `${item.width}×${item.height}` : ''
-  meta.textContent = [dim, getFormatExt(item).toUpperCase()].filter(Boolean).join(' / ')
+  const formatLabel = isVideoPage ? (item.platform ?? 'video').toUpperCase() : getFormatExt(item).toUpperCase()
+  meta.textContent = [dim, formatLabel].filter(Boolean).join(' / ')
   info.append(fn, meta)
   card.appendChild(info)
 

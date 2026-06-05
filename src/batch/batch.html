@@ -20,6 +20,23 @@
       <!-- <div id="filterBar" class="bs-filter-bar"></div> -->
       <p id="importStatus" class="import-status"></p>
       <ul id="importDetails" class="import-details" hidden></ul>
+      <details class="page-video-paste" id="pageVideoPaste">
+        <summary>粘贴视频作品 URL（yt-dlp）</summary>
+        <p class="page-video-hint">
+          每行一个作品页链接（YouTube、B站、抖音、TikTok 含 vm.tiktok.com 短链等）。与上方图片批量导入无关。
+        </p>
+        <textarea
+          id="pageVideoUrls"
+          class="page-video-textarea"
+          rows="4"
+          spellcheck="false"
+          placeholder="https://www.bilibili.com/video/BV…&#10;https://vm.tiktok.com/…"
+        ></textarea>
+        <div class="page-video-toolbar">
+          <button id="importPageVideoUrls" type="button" class="primary">导入视频作品</button>
+        </div>
+        <p id="pageVideoStatus" class="page-video-status"></p>
+      </details>
     </header>
     <main id="grid" class="grid"></main>
     <script type="module" src="batch.js"></script>

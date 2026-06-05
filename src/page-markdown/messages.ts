@@ -11,6 +11,8 @@ export interface PageMdExtractResponse {
   markdownDraft: string
   media: MediaItem[]
   ruleId?: string
+  /** Main column selector used during extract (for in-page image capture). */
+  mainColumnSelector?: string
 }
 
 export interface ExportPageMarkdownRequest {

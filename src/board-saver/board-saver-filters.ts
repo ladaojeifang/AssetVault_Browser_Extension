@@ -20,6 +20,7 @@ export function getSizeCategory(item: BoardSaverItem): string {
 }
 
 export function getFormatExt(item: BoardSaverItem): string {
+  if (item.kind === 'video_page') return 'video_page'
   try {
     return (new URL(item.url).pathname.split('.').pop() || '').toLowerCase().split(/[?#]/)[0]
   } catch {
@@ -28,6 +29,7 @@ export function getFormatExt(item: BoardSaverItem): string {
 }
 
 export function isLowQualityItem(item: BoardSaverItem): boolean {
+  if (item.kind === 'video_page') return false
   const dim = Math.max(item.width ?? 0, item.height ?? 0)
   if (dim > 0 && dim < 64) return true
   if (/google-analytics|doubleclick|facebook\.com\/tr|bat\.bing|linkedin\.com\/li\/track/.test(item.url)) {

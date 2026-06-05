@@ -54,6 +54,23 @@ Service Worker (background.js)
 
 规格见 [fullpage-stitch-session-api-spec.md](./fullpage-stitch-session-api-spec.md)。相关模块：`fullpage-session-api.ts`、`fullpage-session-import.ts`、`fullpage-strip-upload.ts`。
 
+## 作品页视频导入（yt-dlp）
+
+```text
+Popup / 右键 → SW preflight（URL 规则 + Cookie 策略 + Pro 能力）
+  → POST /asset/pageVideoImport（cookieHeader + cookiesFromBrowser: none）
+  → 轮询 GET jobs/{id} → Toast
+```
+
+- 模块：`video-page-url-rules.ts`（URL）、`page-video-import-cookie-strategies.ts`（站点 Cookie）、`page-video-import-cookies.ts`（chrome.cookies）、`page-video-import-api.ts`、`background/page-video-import.ts`
+- Board Saver：扫描 `video_page` 卡片，多选走 `IMPORT_PAGE_VIDEO_BATCH`（VE-M3）
+- `batch.html`：粘贴多行 URL → `IMPORT_PAGE_VIDEO_FROM_TEXT`（FR-VE-UI-04）
+- TikTok `vm.tiktok.com`：`resolveVideoPageContextAsync` 跟随重定向后规范化
+- 单条导入 Toast 可「取消」→ `IMPORT_PAGE_VIDEO_ABORT`
+- 直链视频/GIF 仍走 `tab-messaging` 深扫 → `batch.html` → `importFromURL`
+- API 规格：[page-video-import-api-spec.md](./page-video-import-api-spec.md)
+- 优化记录：[page-video-import-optimization-plan.md](./page-video-import-optimization-plan.md)
+
 ## 网页保存为 Markdown
 
 - 扩展已实现：页面顶部视口缩略图 → 采集主栏 → Turndown → 媒体本地化 → 编排会话长传

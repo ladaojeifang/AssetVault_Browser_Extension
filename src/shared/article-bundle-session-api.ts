@@ -87,6 +87,9 @@ export async function articleBundleSessionAppend(body: {
   relativePath: string
   filePath?: string
   fileDataUrl?: string
+  /** Pro downloads remote URL into session tempDir (same as importFromURL, with optional Referer). */
+  sourceUrl?: string
+  headers?: Record<string, string>
 }): Promise<ArticleBundleSessionAppendResult> {
   return apiRequest('/asset/articleBundleSession/append', {
     method: 'POST',

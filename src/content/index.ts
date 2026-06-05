@@ -11,6 +11,7 @@ import { resolveYoutubeCandidates } from '../shared/site-adapters/youtube'
 import { runMatchingAdapters } from '../shared/site-adapters/index'
 import { dedupeCandidates } from '../shared/media-candidate-core'
 import { scanPageMediaDeepGeneric } from '../shared/stream-detector'
+import { resolveVideoPageContext } from '../shared/video-page-url-rules'
 import type { ContentMessage, ContentResponse } from '../shared/messages'
 import type { CollectMeta, MediaCandidate, PageMediaItem } from '../shared/types'
 
@@ -18,6 +19,8 @@ import { startShotUIInPage } from '../shared/injected-shot-ui'
 import { openBoardSaver as bsOpen, closeBoardSaver } from '../board-saver/board-saver-bridge'
 
 const DROP_ZONE_ID = 'assetvault-drop-zone'
+
+let toastHideTimer: ReturnType<typeof setTimeout> | null = null
 
 function showToast(text: string): void {
   let el = document.getElementById('assetvault-toast')
@@ -27,9 +30,64 @@ function showToast(text: string): void {
     el.className = 'assetvault-toast'
     document.body.appendChild(el)
   }
-  el.textContent = text
+  el.classList.remove('has-action')
+  el.replaceChildren()
+  el.append(text)
   el.classList.add('visible')
-  window.setTimeout(() => el?.classList.remove('visible'), 3200)
+  if (toastHideTimer) clearTimeout(toastHideTimer)
+  toastHideTimer = window.setTimeout(() => el?.classList.remove('visible'), 3200)
+}
+
+function showPageVideoFailureToast(text: string, diagnostics: string): void {
+  let el = document.getElementById('assetvault-toast')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'assetvault-toast'
+    el.className = 'assetvault-toast'
+    document.body.appendChild(el)
+  }
+  el.classList.add('has-action')
+  el.replaceChildren()
+  const span = document.createElement('span')
+  span.textContent = text
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'assetvault-toast-cancel'
+  btn.textContent = '复制诊断'
+  btn.addEventListener('click', () => {
+    void navigator.clipboard.writeText(diagnostics)
+    btn.textContent = '已复制'
+  })
+  el.append(span, btn)
+  el.classList.add('visible')
+  if (toastHideTimer) clearTimeout(toastHideTimer)
+  toastHideTimer = window.setTimeout(() => el?.classList.remove('visible'), 15000)
+}
+
+function showPageVideoJobToast(text: string, jobId: string): void {
+  let el = document.getElementById('assetvault-toast')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'assetvault-toast'
+    el.className = 'assetvault-toast'
+    document.body.appendChild(el)
+  }
+  el.classList.add('has-action')
+  el.replaceChildren()
+  const span = document.createElement('span')
+  span.textContent = text
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'assetvault-toast-cancel'
+  btn.textContent = '取消'
+  btn.addEventListener('click', () => {
+    void chrome.runtime.sendMessage({ type: 'IMPORT_PAGE_VIDEO_ABORT', jobId })
+    el?.classList.remove('visible')
+  })
+  el.append(span, btn)
+  el.classList.add('visible')
+  if (toastHideTimer) clearTimeout(toastHideTimer)
+  toastHideTimer = window.setTimeout(() => el?.classList.remove('visible'), 12000)
 }
 
 function metaFromContextMenuPayload(data: {
@@ -249,6 +307,20 @@ function registerContentScript(): void {
         sendResponse({ ok: true })
         return
       }
+      if (message?.type === 'PAGE_VIDEO_JOB_ACTIVE') {
+        const jobId = String(message.jobId ?? '')
+        if (jobId) showPageVideoJobToast('视频导入进行中', jobId)
+        sendResponse({ ok: true })
+        return
+      }
+      if (message?.type === 'PAGE_VIDEO_JOB_FAILED') {
+        showPageVideoFailureToast(
+          String(message.text ?? '视频导入失败'),
+          String(message.diagnostics ?? '')
+        )
+        sendResponse({ ok: true })
+        return
+      }
 
       const msg = message as ContentMessage
       try {
@@ -304,6 +376,11 @@ function registerContentScript(): void {
         if (msg.type === 'OPEN_BOARD_SAVER') {
           openBoardSaver()
           sendResponse({ ok: true } satisfies ContentResponse)
+          return
+        }
+        if (msg.type === 'PAGE_VIDEO_CONTEXT') {
+          const context = resolveVideoPageContext(location.href)
+          sendResponse({ ok: true, context } satisfies ContentResponse)
           return
         }
         sendResponse({ ok: false, error: 'Unknown message' } satisfies ContentResponse)

@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_VIDEO_FORMAT_PRESET } from './page-video-format-presets'
 import type { ExtensionPreferences } from './types'
 
 export const DEFAULT_PREFS: ExtensionPreferences = {
@@ -5,7 +6,8 @@ export const DEFAULT_PREFS: ExtensionPreferences = {
   token: '',
   defaultFolderId: '',
   duplicatePolicy: 'use_existing',
-  enableDragSaver: true
+  enableDragSaver: true,
+  pageVideoFormatPreset: DEFAULT_PAGE_VIDEO_FORMAT_PRESET
 }
 
 const STORAGE_KEY = 'assetvaultExtensionPrefs'
@@ -13,7 +15,11 @@ const STORAGE_KEY = 'assetvaultExtensionPrefs'
 export async function getPreferences(): Promise<ExtensionPreferences> {
   const stored = await chrome.storage.sync.get(STORAGE_KEY)
   const raw = stored[STORAGE_KEY] as Partial<ExtensionPreferences> | undefined
-  return { ...DEFAULT_PREFS, ...raw }
+  const merged = { ...DEFAULT_PREFS, ...raw }
+  if (!raw?.pageVideoFormatPreset) {
+    merged.pageVideoFormatPreset = DEFAULT_PREFS.pageVideoFormatPreset
+  }
+  return merged
 }
 
 export async function setPreferences(patch: Partial<ExtensionPreferences>): Promise<ExtensionPreferences> {

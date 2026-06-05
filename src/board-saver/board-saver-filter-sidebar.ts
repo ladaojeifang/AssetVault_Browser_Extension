@@ -70,11 +70,16 @@ export function updateBoardSaverFilterSidebar(
     handlers,
   )
 
+  const formatLabel = (key: string): string => (key === 'video_page' ? '视频作品' : `.${key}`)
   const fmtOpts = Object.entries(formats)
     .filter(([k]) => k !== 'all')
-    .sort((a, b) => b[1] - a[1])
+    .sort((a, b) => {
+      if (a[0] === 'video_page') return -1
+      if (b[0] === 'video_page') return 1
+      return b[1] - a[1]
+    })
     .slice(0, 8)
-    .map(([k, v]) => ({ value: k, label: `.${k}`, count: v }))
+    .map(([k, v]) => ({ value: k, label: formatLabel(k), count: v }))
   buildFilterRow(
     'bs-filter-format',
     [{ value: 'all', label: '全部', count: formats.all }, ...fmtOpts],

@@ -6,6 +6,7 @@ import {
 } from './article-bundle-session-api'
 import {
   ARTICLE_BUNDLE_THUMB_RELATIVE,
+  isFilePathUnderTempDir,
   sanitizeMarkdownBundleFilename,
 } from './article-bundle-session-paths'
 import { blobToBase64DataUrl, dataUrlFitsDirectImport, dataUrlToBlob } from './data-url-import'
@@ -15,6 +16,13 @@ export interface ArticleBundleFile {
   /** Prefer dataUrl when already available (e.g. captureVisibleTab). */
   dataUrl?: string
   blob?: Blob
+  /** Absolute path under Pro session tempDir (from chrome.downloads + Referer). */
+  filePath?: string
+}
+
+export type ArticleBundlePrestartedSession = {
+  sessionId: string
+  tempDir: string
 }
 
 export interface ArticleBundleSessionImportArgs {
@@ -24,6 +32,8 @@ export interface ArticleBundleSessionImportArgs {
   targetFolderId?: string | null
   files: ArticleBundleFile[]
   shouldAbort?: () => boolean
+  /** When set, skip `start` (caller already created session for chrome.downloads staging). */
+  prestarted?: ArticleBundlePrestartedSession
 }
 
 export interface ArticleBundleSessionImportResult {
@@ -75,7 +85,43 @@ function formatArticleBundleApiError(e: unknown): string {
   return msg
 }
 
+export async function beginArticleBundleSession(args: {
+  pageUrl: string
+  pageTitle: string
+  markdownFilename: string
+  targetFolderId?: string | null
+}): Promise<ArticleBundlePrestartedSession> {
+  const markdownFilename = sanitizeMarkdownBundleFilename(args.markdownFilename)
+  const startBody = {
+    output: {
+      markdownFilename,
+      targetFolderId: args.targetFolderId ?? null,
+      duplicatePolicy: 'import_copy' as const,
+    },
+    sourceMeta: {
+      pageUrl: args.pageUrl,
+      pageTitle: args.pageTitle,
+    },
+  }
+  let started: Awaited<ReturnType<typeof articleBundleSessionStart>>
+  try {
+    started = await articleBundleSessionStart(startBody)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (!/ARTICLE_BUNDLE_SESSION_LIMIT/i.test(msg)) throw e
+    await new Promise((r) => setTimeout(r, 400))
+    started = await articleBundleSessionStart(startBody)
+  }
+  if (!started.sessionId?.startsWith('ab_')) {
+    throw new Error('Markdown 会话创建失败（Pro 未返回有效 sessionId）')
+  }
+  return { sessionId: started.sessionId, tempDir: started.tempDir }
+}
+
 async function fileToBase64DataUrl(file: ArticleBundleFile): Promise<string> {
+  if (file.filePath) {
+    throw new Error(`fileToBase64DataUrl: use append filePath for ${file.relativePath}`)
+  }
   if (file.dataUrl?.startsWith('data:')) {
     if (!/^data:[^;]*;base64,/i.test(file.dataUrl)) {
       return blobToBase64DataUrl(dataUrlToBlob(file.dataUrl))
@@ -113,32 +159,15 @@ async function importArticleBundleViaSessionInner(
   const markdownFilename = sanitizeMarkdownBundleFilename(args.markdownFilename)
 
   try {
-    const startBody = {
-      output: {
-        markdownFilename,
-        targetFolderId: args.targetFolderId ?? null,
-        duplicatePolicy: 'import_copy' as const,
-      },
-      sourceMeta: {
-        pageUrl: args.pageUrl,
-        pageTitle: args.pageTitle,
-      },
-    }
-
-    let started: Awaited<ReturnType<typeof articleBundleSessionStart>>
-    try {
-      started = await articleBundleSessionStart(startBody)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!/ARTICLE_BUNDLE_SESSION_LIMIT/i.test(msg)) throw e
-      await new Promise((r) => setTimeout(r, 400))
-      started = await articleBundleSessionStart(startBody)
-    }
+    const started = args.prestarted ?? (await beginArticleBundleSession({
+      pageUrl: args.pageUrl,
+      pageTitle: args.pageTitle,
+      markdownFilename,
+      targetFolderId: args.targetFolderId,
+    }))
 
     sessionId = started.sessionId
-    if (!sessionId?.startsWith('ab_')) {
-      throw new Error('Markdown 会话创建失败（Pro 未返回有效 sessionId）')
-    }
+    const tempDir = started.tempDir
 
     for (let i = 0; i < args.files.length; i++) {
       if (args.shouldAbort?.()) {
@@ -148,18 +177,28 @@ async function importArticleBundleViaSessionInner(
       const file = args.files[i]!
       const relativePath = file.relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
 
-      const fileDataUrl = await fileToBase64DataUrl(file)
-      if (!dataUrlFitsDirectImport(fileDataUrl, MAX_DATA_URL_JSON_CHARS)) {
-        throw new Error(
-          `文件 ${relativePath} 过大，无法上传（请减少图片或缩短页面）`,
-        )
+      if (file.filePath) {
+        if (!isFilePathUnderTempDir(file.filePath, tempDir)) {
+          throw new Error(`文件 ${relativePath} 不在会话目录内`)
+        }
+        await articleBundleSessionAppend({
+          sessionId,
+          relativePath,
+          filePath: file.filePath,
+        })
+      } else {
+        const fileDataUrl = await fileToBase64DataUrl(file)
+        if (!dataUrlFitsDirectImport(fileDataUrl, MAX_DATA_URL_JSON_CHARS)) {
+          throw new Error(
+            `文件 ${relativePath} 过大，无法上传（请减少图片或缩短页面）`,
+          )
+        }
+        await articleBundleSessionAppend({
+          sessionId,
+          relativePath,
+          fileDataUrl,
+        })
       }
-
-      await articleBundleSessionAppend({
-        sessionId,
-        relativePath,
-        fileDataUrl,
-      })
     }
 
     if (args.shouldAbort?.()) {
@@ -181,7 +220,7 @@ async function importArticleBundleViaSessionInner(
     return {
       assetId: finished.assetId,
       warnings,
-      tempDir: started.tempDir,
+      tempDir,
     }
   } catch (err) {
     if (sessionId) {

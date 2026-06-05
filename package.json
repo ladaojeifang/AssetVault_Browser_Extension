@@ -7,6 +7,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "contract:sync": "node scripts/sync-api-contract.mjs",
+    "contract:check": "node scripts/check-api-contract.mjs",
+    "contract:gen": "openapi-typescript contracts/web-api-v1-openapi.yaml -o src/shared/api-contract.generated.ts",
+    "contract": "pnpm run contract:sync && pnpm run contract:check",
+    "smoke:pro": "node scripts/smoke-pro-api.mjs",
     "test:fullpage": "node --experimental-strip-types --test tests/fullpage-long-capture.test.ts",
     "dev": "vite build --watch",
     "build": "pnpm run typecheck && pnpm exec vite build",
@@ -21,6 +26,7 @@
     "@types/turndown": "^5.0.6",
     "archiver": "^7.0.1",
     "crx3": "^1.1.3",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11"
   },

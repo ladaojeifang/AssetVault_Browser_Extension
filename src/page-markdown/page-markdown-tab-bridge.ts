@@ -4,6 +4,20 @@ import type { AssetVaultPageMarkdownApi } from './page-markdown-injected'
 /** Wait for layout/paint after programmatic scroll before captureVisibleTab. */
 export const PAGE_MD_THUMB_SCROLL_SETTLE_MS = 420
 
+const DOM_MAIN_COLUMN_SELECTORS = [
+  '.entry-content',
+  '.post-content',
+  '.article-content',
+  '#js_content',
+  '.rich_media_content',
+  'article',
+  'main',
+]
+
+const MIN_DOM_IMG_W = 80
+const MIN_DOM_IMG_H = 80
+const MIN_DOM_IMG_AREA = 8_000
+
 type G = typeof globalThis & { __assetVaultPageMarkdown?: AssetVaultPageMarkdownApi }
 
 function sleep(ms: number): Promise<void> {
@@ -107,20 +121,58 @@ export async function extractPageMarkdownInTab(tabId: number): Promise<PageMdExt
   return payload
 }
 
-/** Fetch with page cookies/referer (service worker fetch often returns HTML or 403). */
-export async function fetchBlobInTab(tabId: number, url: string): Promise<Blob> {
+export type FetchBlobInTabOptions = {
+  referer?: string
+  mainColumnSelector?: string
+  /** All URL variants for this asset (preview, HD, lazy attrs). */
+  matchUrls?: string[]
+}
+
+/**
+ * Download image bytes in tab context (MAIN world fetch with page Referer).
+ * Cross-origin CORS may still block; callers should prefer Pro `sourceUrl` append.
+ */
+export async function fetchBlobInTab(
+  tabId: number,
+  url: string,
+  options: FetchBlobInTabOptions = {},
+): Promise<Blob> {
+  const { referer } = options
   let xs: chrome.scripting.InjectionResult<unknown>[]
   try {
     xs = await chrome.scripting.executeScript({
       target: { tabId },
-      func: async (targetUrl: string) => {
-        const res = await fetch(targetUrl, { credentials: 'include', mode: 'cors' })
+      world: 'MAIN',
+      func: async (targetUrl: string, pageReferer: string) => {
+        const pageRef = pageReferer || location.href
+        const headers: Record<string, string> = {}
+        headers.Referer = pageRef
+        try {
+          headers.Origin = new URL(pageRef).origin
+        } catch {
+          /* ignore */
+        }
+
+        const res = await fetch(targetUrl, {
+          credentials: 'include',
+          mode: 'cors',
+          referrer: pageRef,
+          referrerPolicy: 'unsafe-url',
+          headers,
+        })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
         if (blob.size === 0) throw new Error('empty body')
+        const ct = res.headers.get('content-type') || ''
+        if (ct.includes('text/html') && blob.size < 64 * 1024) {
+          throw new Error('response is HTML, not image')
+        }
+        if (blob.size < 4096) {
+          throw new Error(`image too small (${blob.size} bytes)`)
+        }
         return await blob.arrayBuffer()
       },
-      args: [url],
+      args: [url, referer ?? ''],
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -132,4 +184,33 @@ export async function fetchBlobInTab(tabId: number, url: string): Promise<Blob> 
     throw new Error('页面内下载无数据')
   }
   return new Blob([buf])
+}
+
+export async function scrollMainColumnImagesIntoView(
+  tabId: number,
+  mainColumnSelector?: string,
+): Promise<void> {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: (columnSelector: string, selectors: string[]) => {
+      const list = [columnSelector, ...selectors].filter((s) => !!s?.trim())
+      const seen = new Set<HTMLElement>()
+      for (const sel of list) {
+        const root = document.querySelector(sel)
+        if (!(root instanceof HTMLElement) || seen.has(root)) continue
+        seen.add(root)
+        for (const img of Array.from(root.querySelectorAll('img'))) {
+          if (!(img instanceof HTMLImageElement)) continue
+          try {
+            img.scrollIntoView({ block: 'center', behavior: 'instant' })
+          } catch {
+            img.scrollIntoView(false)
+          }
+        }
+      }
+    },
+    args: [mainColumnSelector ?? '', DOM_MAIN_COLUMN_SELECTORS],
+  })
+  await sleep(400)
 }

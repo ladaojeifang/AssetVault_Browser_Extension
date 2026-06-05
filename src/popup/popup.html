@@ -18,7 +18,24 @@
         在当前页面打开收藏面板，预览、筛选、保存所有图片。
       </p>
       <button id="exportPageMd" type="button">保存为 Markdown</button>
+      <button id="importPageVideo" type="button">保存当前页视频</button>
+      <p id="importPageVideoHint" class="hint" style="margin:0 0 8px">
+        将作品页 URL 交给本机 Pro（yt-dlp）下载入库；非 CDN 直链。
+      </p>
+      <label>
+        视频清晰度预设
+        <select id="pageVideoFormatPreset">
+          <option value="best">最佳（平台默认）</option>
+          <option value="1080p_mp4" selected>1080p MP4</option>
+          <option value="2160p_mp4">4K MP4</option>
+          <option value="audio_only">仅音频</option>
+        </select>
+      </label>
       <button id="batchVideoSave" type="button">视频/GIF 深度采集</button>
+      <button id="batchPageVideoPaste" type="button">批量粘贴视频作品</button>
+      <p class="hint" style="margin:0 0 8px">
+        在批量页粘贴多行作品页 URL，由 Pro（yt-dlp）下载；非 CDN 直链深扫。
+      </p>
       <button id="startShot" type="button">截图</button>
     </section>
 
