@@ -1,12 +1,14 @@
 # AssetVault Pro — 浏览器扩展
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Chrome / Edge（Manifest V3）扩展：从网页采集图片/视频 URL，通过本机 **AssetVault Pro Web API** 由桌面应用下载并导入资料库。
 
-**独立项目**：源码不在 `AssetVault_Pro` 主仓库内；需与本机已安装的 [AssetVault Pro](https://github.com/) 桌面端配合使用。
+**独立项目**：需与本机已安装的 [AssetVault Pro](https://github.com/ladaojeifang/AssetVault_Pro) 桌面端配合使用（[Community Edition](https://github.com/ladaojeifang/AssetVault_Pro)， MIT）。
 
 依赖主应用已启动，并在 **设置 → Advanced → Web API** 中启用 API（默认 `http://127.0.0.1:41596/api/v1`）。
 
-- API 说明：[docs/WEB_API.md](docs/WEB_API.md)（完整版在桌面端仓库 `doc/web-api-v1-guide.md`）
+- API 说明：[docs/WEB_API.md](docs/WEB_API.md)（完整版：[AssetVault_Pro/doc/web-api-v1-guide.md](https://github.com/ladaojeifang/AssetVault_Pro/blob/main/doc/web-api-v1-guide.md)）
 
 ---
 
@@ -38,7 +40,7 @@ testing/          # 单元测试、夹具、测试文档
 scripts/          # postbuild、package、契约检查
 dist/             # 构建输出（加载到浏览器）
 release/          # 打包 zip
-docs/             # Web API 对接摘要
+docs/             # 公开集成文档（索引 docs/README.md）
 contracts/        # OpenAPI 镜像与 extension-api-surface
 ```
 
@@ -150,11 +152,6 @@ work/soft_script/
 
 修改 Web API 契约时：先改 Pro 的 guide + OpenAPI → `contract:sync` → 改 `src/shared/api.ts` 等 → 更新 `contracts/extension-api-surface.json`。
 
-初始化 Git（可选）：
+## Open source
 
-```bash
-cd AssetVault_Browser_Extension
-git init
-git add .
-git commit -m "chore: initial browser extension project"
-```
+MIT — see [LICENSE](LICENSE). Maintainer-only docs: **`docs-internal/`** (`node scripts/init-docs-internal.mjs`). Publishing: [PUBLISHING.md](PUBLISHING.md).

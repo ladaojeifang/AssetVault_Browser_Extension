@@ -2,12 +2,14 @@
 
 独立 Chrome/Edge MV3 扩展，通过本机 **AssetVault Pro Web API** 导入网页媒体。
 
+公开文档：[docs/README.md](docs/README.md)。内部规划：`docs-internal/`（gitignore，运行 `node scripts/init-docs-internal.mjs`）。
+
 ## 必读
 
 | 主题 | 文档 |
 |------|------|
 | 扩展使用与构建 | [README.md](README.md) |
-| Web API（桌面端仓库） | 与 [AssetVault Pro](../AssetVault_Pro/doc/web-api-v1-guide.md) 同机并列克隆时：`../AssetVault_Pro/doc/web-api-v1-guide.md` |
+| Web API（桌面端） | [AssetVault Pro](https://github.com/ladaojeifang/AssetVault_Pro) `doc/web-api-v1-guide.md` 或并列克隆 `../AssetVault_Pro/doc/web-api-v1-guide.md` |
 | URL 高清规则 | [src/shared/url-enlarger-site-rules.ts](src/shared/url-enlarger-site-rules.ts) |
 
 ## 布局

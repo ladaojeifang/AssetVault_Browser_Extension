@@ -8,3 +8,10 @@ release/
 tsc_errors.txt
 src/shared/api-contract.generated.ts
 .codebuddy/
+.cursor/
+
+# Maintainer-only docs (local nested git — see docs-internal.template/README.md)
+docs-internal/
+
+# Local scratch
+scripts/local/

@@ -2,6 +2,7 @@
   "name": "assetvault-extension",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "AssetVault Pro browser extension — save web images via local Web API",
   "type": "module",
   "scripts": {
