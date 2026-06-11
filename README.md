@@ -34,10 +34,12 @@ src/
   popup/          # 扩展弹窗
   batch/          # 批量采集页
   shared/         # API、站点规则、采集逻辑
-scripts/          # postbuild、package（content 由 vite.config 插件构建）
+testing/          # 单元测试、夹具、测试文档
+scripts/          # postbuild、package、契约检查
 dist/             # 构建输出（加载到浏览器）
 release/          # 打包 zip
 docs/             # Web API 对接摘要
+contracts/        # OpenAPI 镜像与 extension-api-surface
 ```
 
 ---
@@ -108,6 +110,22 @@ pnpm run package:crx
 | API | `http://127.0.0.1:41596/api/v1` |
 | Token | 空（仅本机一般不需要） |
 | 重复策略 | `use_existing` |
+
+---
+
+## 测试
+
+测试代码在 `testing/`，与 `src/` 分离。
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm test` | 单元测试 + OpenAPI 契约检查 |
+| `pnpm run test:unit` | 仅单元（不含契约） |
+| `pnpm run contract:sync` | 从 Pro 同步 OpenAPI 到 `contracts/` |
+
+说明与用例索引：[testing/README.md](testing/README.md) · [testing/doc/strategy.md](testing/doc/strategy.md)
+
+**不包含** Pro 的 Vitest 用例；Pro 在 `AssetVault_Pro` 目录执行 `pnpm run test:all`。
 
 ---
 

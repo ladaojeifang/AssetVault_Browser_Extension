@@ -54,6 +54,24 @@ G:/work/soft_script/          # 或你的父目录
 - 作品页视频：`video-import-ytdlp-*-requirements.md`、`page-video-import-api-spec.md`
 - 整页截图：`fullpage-stitch-session-api-spec.md`
 
+## 测试与 CI
+
+两端测试**各自独立执行**，没有统一的 `test:all` 跨仓库命令。
+
+| 仓库 | 入口文档 | PR 门禁命令 |
+|------|----------|-------------|
+| **扩展（本仓库）** | [testing/README.md](../testing/README.md) · [testing/doc/strategy.md](../testing/doc/strategy.md) | `pnpm run typecheck && pnpm test && pnpm run build` |
+| **Pro** | [testing/README.md](../../AssetVault_Pro/testing/README.md) · [testing/doc/strategy.md](../../AssetVault_Pro/testing/doc/strategy.md) | `pnpm run test:ci`（无 Electron 集成）；发布前可加 `pnpm run test:all` |
+
+双仓库总方案（分层、矩阵、CI 设计）：Pro [testing/doc/strategy.md](../../AssetVault_Pro/testing/doc/strategy.md)。
+
+本地一次跑两端：
+
+```bash
+cd ../AssetVault_Pro && pnpm run test:all
+cd ../AssetVault_Browser_Extension && pnpm test
+```
+
 ## 常见问题
 
 **Q: Pro 仓库不在 `../AssetVault_Pro`？**  
