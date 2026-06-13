@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "qiaomu-ai-prd": {
+      "source": "joeseesun/qiaomu-ai-prd",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "0b3d3aaf4084acb9e53782a6f4d35d76677cba9c9fd0691860b957e28f3f2e67"
+    }
+  }
+}

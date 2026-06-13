@@ -12,6 +12,7 @@ src/shared/api-contract.generated.ts
 
 # Maintainer-only docs (local nested git — see docs-internal.template/README.md)
 docs-internal/
+docs/
 
 # Local scratch
 scripts/local/
