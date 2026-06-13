@@ -1,5 +1,7 @@
 # Browser Extension — 公开文档索引
 
+根目录 [README.md](../README.md)（英文）/ [README.zh-CN.md](../README.zh-CN.md)（中文）为快速开始入口。
+
 本目录为 **GitHub 对外发布** 的集成与架构文档。路线图、优化计划、Pro 侧需求草稿等在 **`docs-internal/`**（gitignore，不推送）；克隆后运行 `node scripts/init-docs-internal.mjs`。
 
 ---

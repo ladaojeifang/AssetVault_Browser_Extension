@@ -1,63 +1,65 @@
-# AssetVault Pro — 浏览器扩展
+# AssetVault Pro — Browser Extension
+
+> **中文说明：** [README.zh-CN.md](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Chrome / Edge（Manifest V3）扩展：从网页采集图片/视频 URL，通过本机 **AssetVault Pro Web API** 由桌面应用下载并导入资料库。
+Chrome / Edge (Manifest V3) extension: collect image/video URLs from web pages and import them into your library via the local **AssetVault Pro Web API** (desktop app downloads and ingests assets).
 
-**独立项目**：需与本机已安装的 [AssetVault Pro](https://github.com/ladaojeifang/AssetVault_Pro) 桌面端配合使用（[Community Edition](https://github.com/ladaojeifang/AssetVault_Pro)， MIT）。
+**Standalone project:** requires [AssetVault Pro](https://github.com/ladaojeifang/AssetVault_Pro) desktop ([Community Edition](https://github.com/ladaojeifang/AssetVault_Pro), MIT) running on the same machine.
 
-依赖主应用已启动，并在 **设置 → Advanced → Web API** 中启用 API（默认 `http://127.0.0.1:41596/api/v1`）。
+The desktop app must be running with **Settings → Advanced → Web API** enabled (default `http://127.0.0.1:41596/api/v1`).
 
-- API 说明：[docs/WEB_API.md](docs/WEB_API.md)（完整版：[AssetVault_Pro/doc/web-api-v1-guide.md](https://github.com/ladaojeifang/AssetVault_Pro/blob/main/doc/web-api-v1-guide.md)）
-
----
-
-## 功能（v0.1）
-
-| 能力 | 说明 |
-|------|------|
-| 右键菜单 | 图片/页面上「保存到 AssetVault Pro」 |
-| 拖拽区域 | 将图片拖到右下角投放区（可在弹窗关闭） |
-| 弹窗 | API 地址、Token、默认文件夹、连接状态 |
-| 批量采集 | 多源探测（meta / srcset / 懒加载 / Performance 等）+ 预览图与高清原图 |
-| 视频/GIF 深度采集 | 通用检测 + 站点适配（YouTube、Twitter/X、Bilibili） |
-| 站点权限 | 按需 `optional_host_permissions` |
-| URL 高清规则 | `src/shared/url-enlarger-site-rules.ts`（50+ 站点）；X 走专用 syndication 管线 |
+- API reference: [docs/WEB_API.md](docs/WEB_API.md) (full guide: [AssetVault_Pro/doc/web-api-v1-guide.md](https://github.com/ladaojeifang/AssetVault_Pro/blob/main/doc/web-api-v1-guide.md))
 
 ---
 
-## 目录结构
+## Features (v0.1)
+
+| Capability | Description |
+|------------|-------------|
+| Context menu | “Save to AssetVault Pro” on images/pages |
+| Drop zone | Drag images to the bottom-right drop area (can disable in popup) |
+| Popup | API URL, token, default folder, connection status |
+| Batch collect | Multi-source probing (meta / srcset / lazy-load / Performance, etc.) + preview and full-resolution URLs |
+| Video/GIF deep collect | Generic detection + site adapters (YouTube, Twitter/X, Bilibili) |
+| Site permissions | On-demand `optional_host_permissions` |
+| URL enlarger rules | `src/shared/url-enlarger-site-rules.ts` (50+ sites); X uses dedicated syndication pipeline |
+
+---
+
+## Project layout
 
 ```text
 src/
   manifest.json
   background/     # Service Worker
-  content/        # 页面注入
-  popup/          # 扩展弹窗
-  batch/          # 批量采集页
-  shared/         # API、站点规则、采集逻辑
-testing/          # 单元测试、夹具、测试文档
-scripts/          # postbuild、package、契约检查
-dist/             # 构建输出（加载到浏览器）
-release/          # 打包 zip
-docs/             # 公开集成文档（索引 docs/README.md）
-contracts/        # OpenAPI 镜像与 extension-api-surface
+  content/        # Page injection
+  popup/          # Extension popup
+  batch/          # Batch collection page
+  shared/         # API client, site rules, collection logic
+testing/          # Unit tests, fixtures, test docs
+scripts/          # postbuild, package, contract checks
+dist/             # Build output (load into browser)
+release/          # Packaged zip
+docs/             # Public integration docs (index: docs/README.md)
+contracts/        # OpenAPI mirror and extension-api-surface
 ```
 
 ---
 
-## 开发
+## Development
 
 ```bash
-cd AssetVault_Browser_Extension   # 或你的克隆路径
+cd AssetVault_Browser_Extension   # or your clone path
 pnpm install
 pnpm run build
 ```
 
-- Chrome：`chrome://extensions` → **加载已解压的扩展程序** → 选择本仓库 **`dist`** 目录（见 `LOAD-EXTENSION-HERE.txt`）。
-- 修改后 `pnpm run build`，在扩展页 **重新加载**。
+- Chrome: `chrome://extensions` → **Load unpacked** → select this repo’s **`dist`** folder (see `LOAD-EXTENSION-HERE.txt`).
+- After changes: `pnpm run build`, then **Reload** on the extensions page.
 
-可选监听（ESM 入口 + content IIFE 均会重建；改 `src/content` / `board-saver` 后请在扩展页重新加载）：
+Optional watch mode (rebuilds ESM entry + content IIFE; reload extension after editing `src/content` / `board-saver`):
 
 ```bash
 pnpm run dev
@@ -65,92 +67,92 @@ pnpm run dev
 
 ---
 
-## 打包
+## Packaging
 
-### ZIP（Chrome 网上应用店 / 手动分发）
+### ZIP (Chrome Web Store / manual distribution)
 
 ```bash
 pnpm run package
 ```
 
-输出：`release/assetvault-extension-v0.1.0.zip`。
+Output: `release/assetvault-extension-v0.1.0.zip`.
 
-### CRX（本地安装包）
+### CRX (local install package)
 
 ```bash
 pnpm install
 pnpm run package:crx
 ```
 
-输出：
+Output:
 
-| 文件 | 说明 |
-|------|------|
-| `release/assetvault-extension-v*.crx` | 安装包 |
-| `release/assetvault-extension.pem` | 私钥（**首次生成后务必备份**；同一 `.pem` 才能覆盖安装同 ID 扩展） |
-| `release/assetvault-extension-v*.zip` | 同内容 ZIP（`crx3` 附带生成） |
+| File | Description |
+|------|-------------|
+| `release/assetvault-extension-v*.crx` | Install package |
+| `release/assetvault-extension.pem` | Private key (**back up after first generation**; same `.pem` required to update the same extension ID) |
+| `release/assetvault-extension-v*.zip` | Same content as ZIP (`crx3` also emits this) |
 
-**Chrome 图形界面打包**（不装依赖也可）：
+**Chrome UI packaging** (no extra deps):
 
 1. `pnpm run build`
-2. 打开 `chrome://extensions` → 开启「开发者模式」
-3. **打包扩展程序** → 扩展根目录选 **`dist`** → 私钥选已有 `release/assetvault-extension.pem` 或留空生成新的
-4. 得到 `.crx` 与同目录 `.pem`
+2. Open `chrome://extensions` → enable **Developer mode**
+3. **Pack extension** → root directory **`dist`** → private key: existing `release/assetvault-extension.pem` or leave empty to generate new
+4. Produces `.crx` and `.pem` in the output directory
 
-**安装 CRX 的注意**：
+**CRX install notes**:
 
-- 上架 [Chrome Web Store](https://chrome.google.com/webstore/devconsole) 用 **ZIP**，不用 CRX。
-- 新版 Chrome（Win/Mac）一般**不能**双击 CRX 安装；常用仍是「加载已解压的扩展程序」指向 `dist`，或企业策略 / Edge「加载扩展」。
-- `.pem` 不要提交到 Git（已在 `.gitignore`）。
+- [Chrome Web Store](https://chrome.google.com/webstore/devconsole) uploads use **ZIP**, not CRX.
+- Recent Chrome (Win/Mac) usually **cannot** install CRX by double-click; common options: **Load unpacked** pointing at `dist`, enterprise policy, or Edge “Load extension”.
+- Do not commit `.pem` to Git (listed in `.gitignore`).
 
 ---
 
-## 配置
+## Configuration
 
-| 项 | 默认 |
-|----|------|
+| Setting | Default |
+|---------|---------|
 | API | `http://127.0.0.1:41596/api/v1` |
-| Token | 空（仅本机一般不需要） |
-| 重复策略 | `use_existing` |
+| Token | empty (usually not needed on localhost) |
+| Duplicate policy | `use_existing` |
 
 ---
 
-## 测试
+## Testing
 
-测试代码在 `testing/`，与 `src/` 分离。
+Test code lives under `testing/`, separate from `src/`.
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm test` | 单元测试 + OpenAPI 契约检查 |
-| `pnpm run test:unit` | 仅单元（不含契约） |
-| `pnpm run contract:sync` | 从 Pro 同步 OpenAPI 到 `contracts/` |
+| Command | Description |
+|---------|-------------|
+| `pnpm test` | Unit tests + OpenAPI contract check |
+| `pnpm run test:unit` | Unit tests only (no contract) |
+| `pnpm run contract:sync` | Sync OpenAPI from Pro into `contracts/` |
 
-说明与用例索引：[testing/README.md](testing/README.md) · [testing/doc/strategy.md](testing/doc/strategy.md)
+Details: [testing/README.md](testing/README.md) · [testing/doc/strategy.md](testing/doc/strategy.md)
 
-**不包含** Pro 的 Vitest 用例；Pro 在 `AssetVault_Pro` 目录执行 `pnpm run test:all`。
+Does **not** include Pro’s Vitest suites; run `pnpm run test:all` in `AssetVault_Pro`.
 
 ---
 
-## 与桌面端仓库协作
+## Working with the desktop repo
 
-建议本地目录布局：
+Recommended local layout:
 
 ```text
 work/soft_script/
-  AssetVault.code-workspace    # 可选：Cursor 多根工作区
-  AssetVault_Pro/              # Electron 桌面端（API 真源）
-  AssetVault_Browser_Extension/  # 本仓库
+  AssetVault.code-workspace    # optional: Cursor multi-root workspace
+  AssetVault_Pro/              # Electron desktop (API source of truth)
+  AssetVault_Browser_Extension/  # this repo
 ```
 
-完整流程见 **[docs/cross-repo-workflow.md](docs/cross-repo-workflow.md)**。
+Full workflow: **[docs/cross-repo-workflow.md](docs/cross-repo-workflow.md)**.
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm run contract:sync` | 从 Pro 复制 OpenAPI 到 `contracts/` |
-| `pnpm run contract:check` | 校验扩展调用面 ⊆ OpenAPI（`pnpm test` 已包含） |
-| `pnpm run smoke:pro` | Pro 运行时探测 `GET /app/info` |
+| Command | Description |
+|---------|-------------|
+| `pnpm run contract:sync` | Copy OpenAPI from Pro into `contracts/` |
+| `pnpm run contract:check` | Verify extension surface ⊆ OpenAPI (included in `pnpm test`) |
+| `pnpm run smoke:pro` | Probe `GET /app/info` when Pro is running |
 
-修改 Web API 契约时：先改 Pro 的 guide + OpenAPI → `contract:sync` → 改 `src/shared/api.ts` 等 → 更新 `contracts/extension-api-surface.json`。
+When changing Web API contracts: update Pro guide + OpenAPI → `contract:sync` → update `src/shared/api.ts` etc. → update `contracts/extension-api-surface.json`.
 
 ## Open source
 
